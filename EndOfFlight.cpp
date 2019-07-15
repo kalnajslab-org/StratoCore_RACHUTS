@@ -1,0 +1,47 @@
+/*
+ *  EndOfFlight.cpp
+ *  Author:  Alex St. Clair
+ *  Created: June 2019
+ *  
+ *  This file implements a template for end of flight mode.
+ */
+
+#include "StratoTemplate.h"
+
+enum EFStates_t : uint8_t {
+    EF_ENTRY = MODE_ENTRY,
+    
+    // add any desired states between entry and shutdown
+    EF_LOOP,
+    
+    EF_SHUTDOWN = MODE_SHUTDOWN,
+    EF_EXIT = MODE_EXIT
+};
+
+void StratoTemplate::EndOfFlightMode()
+{
+    switch (inst_substate) {
+    case EF_ENTRY:
+        // perform setup
+        log_nominal("Entering EF");
+        inst_substate = EF_LOOP;
+        break;
+    case EF_LOOP:
+        // nominal ops
+        log_debug("EF loop");
+        break;
+    case EF_SHUTDOWN:
+        // prep for shutdown
+        log_nominal("Shutdown warning received in EF");
+        break;
+    case EF_EXIT:
+        // perform cleanup
+        log_nominal("Exiting EF");
+        break;
+    default:
+        // todo: throw error
+        log_error("Unknown substate in EF");
+        inst_substate = EF_ENTRY; // reset
+        break;
+    }
+}
