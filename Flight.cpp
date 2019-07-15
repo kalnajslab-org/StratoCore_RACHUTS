@@ -1,12 +1,12 @@
 /*
  *  Flight.cpp
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
- *  This file implements a template for flight mode.
+ *  This file implements the RACHuTS flight mode.
  */
 
-#include "StratoTemplate.h"
+#include "StratoPIB.h"
 
 enum FLStates_t : uint8_t {
     FL_ENTRY = MODE_ENTRY,
@@ -31,7 +31,7 @@ enum FLStates_t : uint8_t {
 //  * on each loop, whichever substate is set will be perfomed
 //  * when the mode is changed by the Zephyr, FL_EXIT will automatically be set
 //  * it is up to the FL_EXIT logic perform any actions for leaving flight mode
-void StratoTemplate::FlightMode()
+void StratoPIB::FlightMode()
 {
     switch (inst_substate) {
     case FL_ENTRY:

@@ -1,5 +1,5 @@
 /*
- *  TemplateBufferGuard.h
+ *  PIBBufferGuard.h
  *  Author:  Alex St. Clair
  *  Created: July 2019
  *  

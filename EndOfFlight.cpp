@@ -1,12 +1,12 @@
 /*
  *  EndOfFlight.cpp
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
- *  This file implements a template for end of flight mode.
+ *  This file implements the RACHuTS end of flight mode.
  */
 
-#include "StratoTemplate.h"
+#include "StratoPIB.h"
 
 enum EFStates_t : uint8_t {
     EF_ENTRY = MODE_ENTRY,
@@ -18,7 +18,7 @@ enum EFStates_t : uint8_t {
     EF_EXIT = MODE_EXIT
 };
 
-void StratoTemplate::EndOfFlightMode()
+void StratoPIB::EndOfFlightMode()
 {
     switch (inst_substate) {
     case EF_ENTRY:

@@ -1,20 +1,19 @@
 /*
- *  StratoTemplate.h
+ *  StratoPIB.h
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
  *  This file declares an Arduino library (C++ class) that inherits
- *  from the StratoCore class. It serves as both a template and test
- *  class for inheriting from the StratoCore.
+ *  from the StratoCore class. It serves as the overarching class
+ *  for the RACHuTS Profiler Interface Board, or PIB.
  */
 
-#ifndef STRATOTEMPLATE_H
-#define STRATOTEMPLATE_H
+#ifndef STRATOPIB_H
+#define STRATOPIB_H
 
 #include "StratoCore.h"
-#include "TemplateBufferGuard.h"
+#include "PIBBufferGuard.h"
 
-// for testing purposes, use LPC
 #define ZEPHYR_SERIAL   Serial2 // LPC
 #define INSTRUMENT      LPC
 
@@ -29,10 +28,10 @@ enum ScheduleAction_t : uint8_t {
     NUM_ACTIONS
 };
 
-class StratoTemplate : public StratoCore {
+class StratoPIB : public StratoCore {
 public:
-    StratoTemplate();
-    ~StratoTemplate() { };
+    StratoPIB();
+    ~StratoPIB() { };
 
     // called before the loop begins
     void InstrumentSetup();
@@ -63,4 +62,4 @@ private:
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 };
 
-#endif /* STRATOTEMPLATE_H */
+#endif /* STRATOPIB_H */

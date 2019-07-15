@@ -1,21 +1,21 @@
 /*
- *  StratoTemplate.cpp
+ *  StratoPIB.cpp
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
  *  This file implements an Arduino library (C++ class) that inherits
- *  from the StratoCore class. It serves as both a template and test
- *  class for inheriting from the StratoCore.
+ *  from the StratoCore class. It serves as the overarching class
+ *  for the RACHuTS Profiler Interface Board, or PIB.
  */
 
-#include "StratoTemplate.h"
+#include "StratoPIB.h"
 
-StratoTemplate::StratoTemplate()
+StratoPIB::StratoPIB()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
 {
 }
 
-void StratoTemplate::InstrumentSetup()
+void StratoPIB::InstrumentSetup()
 {
     // for LPC RS232 transceiver for testing
     pinMode(29, OUTPUT);
@@ -24,13 +24,13 @@ void StratoTemplate::InstrumentSetup()
     digitalWrite(30, HIGH);
 }
 
-void StratoTemplate::InstrumentLoop()
+void StratoPIB::InstrumentLoop()
 {
     WatchFlags();
 }
 
 // The telecommand handler must return ACK/NAK
-bool StratoTemplate::TCHandler(Telecommand_t telecommand)
+bool StratoPIB::TCHandler(Telecommand_t telecommand)
 {
     String dbg_msg = "";
 
@@ -47,7 +47,7 @@ bool StratoTemplate::TCHandler(Telecommand_t telecommand)
     return true;
 }
 
-void StratoTemplate::ActionHandler(uint8_t action)
+void StratoPIB::ActionHandler(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
     if (action >= NUM_ACTIONS) {
@@ -60,7 +60,7 @@ void StratoTemplate::ActionHandler(uint8_t action)
     action_flags[action].stale_count = 0;
 }
 
-bool StratoTemplate::CheckAction(uint8_t action)
+bool StratoPIB::CheckAction(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
     if (action >= NUM_ACTIONS) {
@@ -78,7 +78,7 @@ bool StratoTemplate::CheckAction(uint8_t action)
     }
 }
 
-void StratoTemplate::WatchFlags()
+void StratoPIB::WatchFlags()
 {
     // monitor for and clear stale flags
     for (int i = 0; i < NUM_ACTIONS; i++) {

@@ -1,12 +1,12 @@
 /*
  *  Standby.cpp
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
- *  This file implements a template for standby mode.
+ *  This file implements the RACHuTS standby mode.
  */
 
-#include "StratoTemplate.h"
+#include "StratoPIB.h"
 
 enum SBStates_t : uint8_t {
     SB_ENTRY = MODE_ENTRY,
@@ -18,7 +18,7 @@ enum SBStates_t : uint8_t {
     SB_EXIT = MODE_EXIT
 };
 
-void StratoTemplate::StandbyMode()
+void StratoPIB::StandbyMode()
 {
     switch (inst_substate) {
     case SB_ENTRY:

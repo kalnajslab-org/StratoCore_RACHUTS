@@ -1,12 +1,12 @@
 /*
  *  Safety.cpp
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
- *  This file implements a template for safety mode.
+ *  This file implements the RACHuTS safety mode.
  */
 
-#include "StratoTemplate.h"
+#include "StratoPIB.h"
 
 enum SAStates_t : uint8_t {
     SA_ENTRY = MODE_ENTRY,
@@ -20,7 +20,7 @@ enum SAStates_t : uint8_t {
     SA_EXIT = MODE_EXIT
 };
 
-void StratoTemplate::SafetyMode()
+void StratoPIB::SafetyMode()
 {
     switch (inst_substate) {
     case SA_ENTRY:

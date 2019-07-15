@@ -1,12 +1,12 @@
 /*
  *  LowPower.cpp
  *  Author:  Alex St. Clair
- *  Created: June 2019
+ *  Created: July 2019
  *  
- *  This file implements a template for low power mode.
+ *  This file implements the RACHuTS low power mode.
  */
 
-#include "StratoTemplate.h"
+#include "StratoPIB.h"
 
 enum LPStates_t : uint8_t {
     LP_ENTRY = MODE_ENTRY,
@@ -18,7 +18,7 @@ enum LPStates_t : uint8_t {
     LP_EXIT = MODE_EXIT
 };
 
-void StratoTemplate::LowPowerMode()
+void StratoPIB::LowPowerMode()
 {
     switch (inst_substate) {
     case LP_ENTRY:
