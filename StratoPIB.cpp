@@ -23,11 +23,15 @@ StratoPIB::StratoPIB()
 
 void StratoPIB::InstrumentSetup()
 {
-    // for LPC RS232 transceiver for testing
+    // for RS232 transceiver
     pinMode(FORCEOFF_232, OUTPUT);
     pinMode(FORCEON_232, OUTPUT);
     digitalWrite(FORCEOFF_232, HIGH);
     digitalWrite(FORCEON_232, HIGH);
+
+    // safe pin required by Zephyr
+    pinMode(SAFE_PIN, OUTPUT);
+    digitalWrite(SAFE_PIN, LOW);
 }
 
 void StratoPIB::InstrumentLoop()

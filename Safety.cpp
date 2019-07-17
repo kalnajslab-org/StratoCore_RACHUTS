@@ -29,7 +29,7 @@ void StratoPIB::SafetyMode()
 
         // todo: how to reach safety? Need to reel in PU
 
-        // todo: write safe pin high
+        digitalWrite(SAFE_PIN, HIGH);
         
         inst_substate = SA_SEND_S;
         break;
@@ -67,6 +67,7 @@ void StratoPIB::SafetyMode()
         break;
     case SA_EXIT:
         // perform cleanup
+        digitalWrite(SAFE_PIN, LOW);
         log_nominal("Exiting SA");
         break;
     default:

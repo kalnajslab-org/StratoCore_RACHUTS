@@ -17,11 +17,14 @@ enum FLStates_t : uint8_t {
     FL_START_REEL_OUT,
     FL_START_REEL_IN,
     FL_MONITOR_MOTION,
-    FL_ERROR,
+    FL_ERROR_LANDING,
+    FL_ERROR_LOOP,
     
     FL_SHUTDOWN = MODE_SHUTDOWN,
     FL_EXIT = MODE_EXIT
 };
+
+char log_array[101] = {0};
 
 // this function is called at the defined rate
 //  * when flight mode is entered, it will start in FL_ENTRY state
@@ -54,10 +57,16 @@ void StratoPIB::FlightMode()
         log_debug("FL Idle");
         break;
     case FL_START_REEL_IN:
+        snprintf(log_array, 101, "Retracting %0.1f revs", retract_length);
+        ZephyrLogFine(log_array);
+        mcb_motion_finished = false;
         mcbTX.retractX(retract_length); // todo: verification
         inst_substate = FL_MONITOR_MOTION;
         break;
     case FL_START_REEL_OUT:
+        snprintf(log_array, 101, "Deploying %0.1f revs", deploy_length);
+        ZephyrLogFine(log_array);
+        mcb_motion_finished = false;
         mcbTX.deployX(deploy_length); // todo: verification
         inst_substate = FL_MONITOR_MOTION;
         break;
@@ -65,16 +74,26 @@ void StratoPIB::FlightMode()
         // todo: what should be monitored? Just check for MCB messages?
 
         if (CheckAction(COMMAND_MOTION_STOP)) {
-            // todo: how to verify, command already sent in router, will a motion finished be sent?
+            // todo: verification of motion stop
+            ZephyrLogFine("Commanded motion stop");
+            inst_substate = FL_IDLE;
+            break;
         }
 
         if (mcb_motion_finished) {
+            ZephyrLogFine("Motion complete");
             inst_substate = FL_IDLE;
         }
         break;
-    case FL_ERROR:
+    case FL_ERROR_LANDING:
         // generic error state for flight mode to go to if any error is detected
-        // this state can make sure the ground is informed, and wait for ground intervention
+        // this state can make sure the ground is informed, and go to the error looop to wait for ground intervention
+        // before setting this substate, a ZephyrLogCrit should be sent
+        inst_substate = FL_ERROR_LOOP;
+        break;
+    case FL_ERROR_LOOP:
+        // wait for ground
+        // todo: add exit condition
         break;
     case FL_SHUTDOWN:
         // prep for shutdown
@@ -86,8 +105,8 @@ void StratoPIB::FlightMode()
         break;
     default:
         // todo: throw error
-        log_error("Unknown substate in FL");
-        inst_substate = FL_ENTRY; // reset
+        ZephyrLogCrit("Unknown substate in FL");
+        inst_substate = FL_ERROR_LANDING;
         break;
     }
 }
