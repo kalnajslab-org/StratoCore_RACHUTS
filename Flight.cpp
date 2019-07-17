@@ -13,12 +13,10 @@ enum FLStates_t : uint8_t {
     
     // add any desired states between entry and shutdown
     FL_IDLE,
-    FL_PU_CONFIG,
-    FL_MAGNETS_OFF,
-    FL_UNDOCK,
-    FL_WAIT_FOR_PROFILE,
-    FL_DOCK,
-    FL_READ_PU,
+    FL_GPS_WAIT,
+    FL_START_REEL_OUT,
+    FL_START_REEL_IN,
+    FL_MONITOR_MOTION,
     FL_ERROR,
     
     FL_SHUTDOWN = MODE_SHUTDOWN,
@@ -33,40 +31,46 @@ enum FLStates_t : uint8_t {
 //  * it is up to the FL_EXIT logic perform any actions for leaving flight mode
 void StratoPIB::FlightMode()
 {
+    // todo: draw out flight mode state machine
     switch (inst_substate) {
     case FL_ENTRY:
         // perform setup
         log_nominal("Entering FL");
-        inst_substate = FL_IDLE; // automatically go to idle
+        inst_substate = FL_GPS_WAIT;
+        break;
+    case FL_GPS_WAIT:
+        // wait for the first GPS message from Zephyr to set the time before moving on
+        log_debug("Waiting on GPS time");
+        if (time_valid) {
+            inst_substate = FL_IDLE;
+        }
         break;
     case FL_IDLE:
-        // some logic here to determine when to leave idle and go to PU_CONFIG, e.g.:
-        // if (time_for_measurement)
-        //    inst_substate = PU_CONFIG
+        if (CheckAction(COMMAND_REEL_IN)) {
+            inst_substate = FL_START_REEL_IN;
+        } else if (CheckAction(COMMAND_REEL_OUT)) {
+            inst_substate = FL_START_REEL_OUT;
+        }
         log_debug("FL Idle");
         break;
-    case FL_PU_CONFIG:
-        // logic/functions to configure the PU
-        inst_substate = FL_MAGNETS_OFF;
+    case FL_START_REEL_IN:
+        mcbTX.retractX(retract_length); // todo: verification
+        inst_substate = FL_MONITOR_MOTION;
         break;
-    case FL_MAGNETS_OFF:
-        // logic/functions to turn the magnets off
-        inst_substate = FL_UNDOCK;
+    case FL_START_REEL_OUT:
+        mcbTX.deployX(deploy_length); // todo: verification
+        inst_substate = FL_MONITOR_MOTION;
         break;
-    case FL_UNDOCK:
-        // logic/functions for undocking
-        inst_substate = FL_WAIT_FOR_PROFILE;
-        break;
-    case FL_WAIT_FOR_PROFILE:
-        // logic/functions to determine when the profile is over and to move to the next mode
-        // any necessary monitoring
-        break;
-    case FL_DOCK:
-        // logic/functions to perform docking and determine what to do next
-        break;
-    case FL_READ_PU:
-        // logic/functions to read and store all of the data from the PU
-        // lots of data, so will likely involve polling of read status or something
+    case FL_MONITOR_MOTION:
+        // todo: what should be monitored? Just check for MCB messages?
+
+        if (CheckAction(COMMAND_MOTION_STOP)) {
+            // todo: how to verify, command already sent in router, will a motion finished be sent?
+        }
+
+        if (mcb_motion_finished) {
+            inst_substate = FL_IDLE;
+        }
         break;
     case FL_ERROR:
         // generic error state for flight mode to go to if any error is detected

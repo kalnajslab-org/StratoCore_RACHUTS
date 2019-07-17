@@ -26,6 +26,11 @@ void StratoPIB::SafetyMode()
     case SA_ENTRY:
         // perform setup
         log_nominal("Entering SA");
+
+        // todo: how to reach safety? Need to reel in PU
+
+        // todo: write safe pin high
+        
         inst_substate = SA_SEND_S;
         break;
     case SA_SEND_S:

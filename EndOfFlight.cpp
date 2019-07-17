@@ -24,6 +24,9 @@ void StratoPIB::EndOfFlightMode()
     case EF_ENTRY:
         // perform setup
         log_nominal("Entering EF");
+
+        // need to figure out what to do here, should already be safe, but need to verify
+
         inst_substate = EF_LOOP;
         break;
     case EF_LOOP:
