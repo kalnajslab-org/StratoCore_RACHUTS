@@ -30,19 +30,19 @@
 #include "HardwareSerial.h" // not necessary, but makes it easy to find the file with a smart IDE
 
 #ifndef SERIAL1_RX_BUFFER_SIZE
-#error "Need to redefine the Serial1 buffer size to 64"
+#error "Need to redefine the Serial1 buffer size to 512"
 #elif SERIAL1_RX_BUFFER_SIZE != 512 // keep a little headroom for Zephyr
 #error "Serial1 buffer should be 64 bytes"
 #endif
 
 #ifndef SERIAL2_RX_BUFFER_SIZE
-#error "Need to redefine the Serial2 buffer size to 1024"
+#error "Need to redefine the Serial2 buffer size to 128"
 #elif SERIAL2_RX_BUFFER_SIZE != 128 // MCB comms should be small
 #error "Serial2 buffer should be 1024 bytes"
 #endif
 
 #ifndef SERIAL3_RX_BUFFER_SIZE
-#error "Need to redefine the Serial3 buffer size to 64"
+#error "Need to redefine the Serial3 buffer size to 4096"
 #elif SERIAL3_RX_BUFFER_SIZE != 4096 // todo: optimize this for PU
 #error "Serial3 buffer should be 64 bytes"
 #endif
