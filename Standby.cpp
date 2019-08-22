@@ -2,7 +2,7 @@
  *  Standby.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file implements the RACHuTS standby mode.
  */
 
@@ -10,10 +10,11 @@
 
 enum SBStates_t : uint8_t {
     SB_ENTRY = MODE_ENTRY,
-    
+
     // add any desired states between entry and shutdown
     SB_LOOP,
-    
+
+    SB_ERROR_LANDING = MODE_ERROR,
     SB_SHUTDOWN = MODE_SHUTDOWN,
     SB_EXIT = MODE_EXIT
 };
@@ -39,6 +40,9 @@ void StratoPIB::StandbyMode()
             zephyrTX.IMR();
             scheduler.AddAction(SEND_IMR, 60);
         }
+        break;
+    case SB_ERROR_LANDING:
+        log_debug("SB error");
         break;
     case SB_SHUTDOWN:
         // prep for shutdown

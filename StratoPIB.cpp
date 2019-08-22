@@ -14,9 +14,6 @@ StratoPIB::StratoPIB()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
     , mcbComm(&MCB_SERIAL)
 {
-    waiting_mcb_messages = 0;
-    mcb_low_power = false;
-    mcb_motion_finished = false;
 }
 
 void StratoPIB::InstrumentSetup()
@@ -79,6 +76,22 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     case CANCELMOTION:
         mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(COMMAND_MOTION_STOP);
+        break;
+    case SETAUTO:
+        if (!mcb_motion_ongoing) {
+            autonomous_mode = true;
+            inst_substate = MODE_ENTRY; // restart FL in auto
+        } else {
+            return false;
+        }
+        break;
+    case SETMANUAL:
+        if (!mcb_motion_ongoing) {
+            autonomous_mode = false;
+            inst_substate = MODE_ENTRY; // restart FL in manual
+        } else {
+            return false;
+        }
         break;
     default:
         log_error("Unknown TC received");
@@ -146,6 +159,8 @@ void StratoPIB::RunMCBRouter()
     while (NO_MESSAGE != rx_msg) {
         if (ASCII_MESSAGE == rx_msg) {
             HandleMCBASCII();
+        } else if (ACK_MESSAGE == rx_msg) {
+            HandleMCBAck();
         } else {
             log_error("Non-ASCII message from MCB");
         }
@@ -159,7 +174,24 @@ void StratoPIB::HandleMCBASCII()
     switch (mcbComm.ascii_rx.msg_id) {
     case MCB_MOTION_FINISHED:
         log_nominal("MCB motion finished");
-        mcb_motion_finished = true;
+        mcb_motion = NO_MOTION;
+        mcb_motion_ongoing = false;
+        break;
+    case MCB_ERROR:
+        if (mcbComm.RX_Error(log_array, 101)) {
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
+        break;
+    case MCB_MOTION_FAULT:
+        if (mcbComm.RX_Motion_Fault(motion_fault, motion_fault+1, motion_fault+2, motion_fault+3,
+                                    motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
+            mcb_motion_ongoing = false;
+            snprintf(log_array, 101, "MCB Fault: %u,%u,%u,%u,%u,%u,%u,%u", motion_fault[0], motion_fault[1],
+                     motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
         break;
     default:
         log_error("Unknown MCB message received");
@@ -174,8 +206,55 @@ void StratoPIB::HandleMCBAck()
         log_nominal("MCB in low power");
         mcb_low_power = true;
         break;
+    case MCB_REEL_IN:
+        if (MOTION_REEL_IN == mcb_motion) mcb_motion_ongoing = true;
+        break;
+    case MCB_REEL_OUT:
+        if (MOTION_REEL_OUT == mcb_motion) mcb_motion_ongoing = true;
+        break;
+    case MCB_DOCK:
+        if (MOTION_DOCK == mcb_motion) mcb_motion_ongoing = true;
+        break;
+    case MCB_IN_ACC:
+    case MCB_OUT_ACC:
+    case MCB_DOCK_ACC:
+        // currently not handled, though received
+        break;
     default:
         log_error("Unknown MCB ack received");
         break;
     }
+}
+
+bool StratoPIB::StartMCBMotion()
+{
+    bool success = false;
+
+    switch (mcb_motion) {
+    case MOTION_REEL_IN:
+        snprintf(log_array, 101, "Retracting %0.1f revs", retract_length);
+        success = mcbComm.TX_Reel_In(retract_length, retract_velocity); // todo: verification
+        break;
+    case MOTION_REEL_OUT:
+        snprintf(log_array, 101, "Deploying %0.1f revs", deploy_length);
+        success = mcbComm.TX_Reel_Out(deploy_length, deploy_velocity); // todo: verification
+        break;
+    case MOTION_DOCK:
+        snprintf(log_array, 101, "Docking %0.1f revs", dock_length);
+        success = mcbComm.TX_Dock(dock_length, dock_velocity); // todo: verification
+        break;
+    case MOTION_UNDOCK:
+    default:
+        mcb_motion = NO_MOTION;
+        log_error("Unknown motion type to start");
+        return false;
+    }
+
+    if (autonomous_mode) {
+        log_nominal(log_array);
+    } else {
+        ZephyrLogFine(log_array);
+    }
+
+    return success;
 }

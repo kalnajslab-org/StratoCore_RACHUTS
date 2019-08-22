@@ -16,6 +16,7 @@ enum LPStates_t : uint8_t {
     LP_CHECK_MCB,
     LP_LOOP,
 
+    LP_ERROR_LANDING = MODE_ERROR,
     LP_SHUTDOWN = MODE_SHUTDOWN,
     LP_EXIT = MODE_EXIT
 };
@@ -46,6 +47,9 @@ void StratoPIB::LowPowerMode()
     case LP_LOOP:
         // nominal ops
         log_debug("LP loop");
+        break;
+    case LP_ERROR_LANDING:
+        log_debug("LP error");
         break;
     case LP_SHUTDOWN:
         // prep for shutdown
