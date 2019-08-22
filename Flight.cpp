@@ -2,7 +2,7 @@
  *  Flight.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file implements the RACHuTS flight mode.
  */
 
@@ -10,16 +10,17 @@
 
 enum FLStates_t : uint8_t {
     FL_ENTRY = MODE_ENTRY,
-    
+
     // add any desired states between entry and shutdown
     FL_IDLE,
     FL_GPS_WAIT,
     FL_START_REEL_OUT,
     FL_START_REEL_IN,
+    FL_START_DOCK,
     FL_MONITOR_MOTION,
     FL_ERROR_LANDING,
     FL_ERROR_LOOP,
-    
+
     FL_SHUTDOWN = MODE_SHUTDOWN,
     FL_EXIT = MODE_EXIT
 };
@@ -60,14 +61,21 @@ void StratoPIB::FlightMode()
         snprintf(log_array, 101, "Retracting %0.1f revs", retract_length);
         ZephyrLogFine(log_array);
         mcb_motion_finished = false;
-        mcbTX.retractX(retract_length); // todo: verification
+        mcbComm.TX_Reel_In(retract_length, retract_velocity); // todo: verification
         inst_substate = FL_MONITOR_MOTION;
         break;
     case FL_START_REEL_OUT:
         snprintf(log_array, 101, "Deploying %0.1f revs", deploy_length);
         ZephyrLogFine(log_array);
         mcb_motion_finished = false;
-        mcbTX.deployX(deploy_length); // todo: verification
+        mcbComm.TX_Reel_Out(deploy_length, deploy_velocity); // todo: verification
+        inst_substate = FL_MONITOR_MOTION;
+        break;
+    case FL_START_DOCK:
+        snprintf(log_array, 101, "Docking %0.1f revs", dock_length);
+        ZephyrLogFine(log_array);
+        mcb_motion_finished = false;
+        mcbComm.TX_Dock(dock_length, dock_velocity); // todo: verification
         inst_substate = FL_MONITOR_MOTION;
         break;
     case FL_MONITOR_MOTION:
@@ -87,7 +95,7 @@ void StratoPIB::FlightMode()
         break;
     case FL_ERROR_LANDING:
         // generic error state for flight mode to go to if any error is detected
-        // this state can make sure the ground is informed, and go to the error looop to wait for ground intervention
+        // this state can make sure the ground is informed, and go to the error loop to wait for ground intervention
         // before setting this substate, a ZephyrLogCrit should be sent
         inst_substate = FL_ERROR_LOOP;
         break;

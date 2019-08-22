@@ -2,9 +2,9 @@
  *  PIBBufferGuard.h
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  Provides compiler checks that the software serial buffers are correctly sized.
- * 
+ *
  *  In order to do some of the asychronous communication at the data amounts
  *  and rates these payloads require, yet with the lack of direct UART interrupt
  *  access that Arduino gives, we need to modify the software Serial buffers in
@@ -12,8 +12,8 @@
  */
 
 // To change a buffer, locate teensy/avr/cores/teensy3/HardwareSerial.h
-// Add the following lines (uncommented) near the top (but after "#define 
-// HardwareSerial_h") and change any buffer sizes desired from the 64-byte 
+// Add the following lines (uncommented) near the top (but after "#define
+// HardwareSerial_h") and change any buffer sizes desired from the 64-byte
 // default.
 // -------------- Strateole 2 Buffer Changes --------------
 // #define SERIAL1_RX_BUFFER_SIZE     64
@@ -32,19 +32,19 @@
 #ifndef SERIAL1_RX_BUFFER_SIZE
 #error "Need to redefine the Serial1 buffer size to 512"
 #elif SERIAL1_RX_BUFFER_SIZE != 512 // keep a little headroom for Zephyr
-#error "Serial1 buffer should be 64 bytes"
+#error "Serial1 buffer should be 512 bytes"
 #endif
 
 #ifndef SERIAL2_RX_BUFFER_SIZE
 #error "Need to redefine the Serial2 buffer size to 128"
 #elif SERIAL2_RX_BUFFER_SIZE != 128 // MCB comms should be small
-#error "Serial2 buffer should be 1024 bytes"
+#error "Serial2 buffer should be 128 bytes"
 #endif
 
 #ifndef SERIAL3_RX_BUFFER_SIZE
 #error "Need to redefine the Serial3 buffer size to 4096"
 #elif SERIAL3_RX_BUFFER_SIZE != 4096 // todo: optimize this for PU
-#error "Serial3 buffer should be 64 bytes"
+#error "Serial3 buffer should be 4096 bytes"
 #endif
 
 #ifndef SERIAL4_RX_BUFFER_SIZE

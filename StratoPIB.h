@@ -2,7 +2,7 @@
  *  StratoPIB.h
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file declares an Arduino library (C++ class) that inherits
  *  from the StratoCore class. It serves as the overarching class
  *  for the RACHuTS Profiler Interface Board, or PIB.
@@ -14,6 +14,7 @@
 #include "StratoCore.h"
 #include "PIBHardware.h"
 #include "PIBBufferGuard.h"
+#include "MCBComm.h"
 
 #define INSTRUMENT      RACHUTS
 
@@ -28,6 +29,7 @@ enum ScheduleAction_t : uint8_t {
     RESEND_MCB_LP,
     COMMAND_REEL_OUT,
     COMMAND_REEL_IN,
+    COMMAND_DOCK,
     COMMAND_MOTION_STOP,
     NUM_ACTIONS
 };
@@ -43,15 +45,12 @@ public:
     // called at the end of each loop
     void InstrumentLoop();
 
-    // called from serialEvent2 in main
-    void TakeMCBByte(uint8_t new_byte);
-
+    // called in each loop
     void RunMCBRouter();
 
 private:
-    // XML reader/writer for MCB comms
-    XMLWriter_v4 mcbTX;
-    XMLReader_v3 mcbRX;
+    // internal serial interface object for the MCB
+    MCBComm mcbComm;
 
     // tracks number of MCB messages that need processing
     uint8_t waiting_mcb_messages;
@@ -61,8 +60,12 @@ private:
     bool mcb_motion_finished;
 
     // telecommand values
-    float deploy_length;
-    float retract_length;
+    float deploy_length = 0.0f;
+    float deploy_velocity = 250.0f;
+    float retract_length = 0.0f;
+    float retract_velocity = 250.0f;
+    float dock_length = 0.0f;
+    float dock_velocity = 80.0f;
 
     // Mode functions (implemented in unique source files)
     void StandbyMode();
@@ -85,6 +88,10 @@ private:
 
     // Monitor the action flags and clear old ones
     void WatchFlags();
+
+    // Handle messages from the MCB
+    void HandleMCBASCII();
+    void HandleMCBAck();
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 };

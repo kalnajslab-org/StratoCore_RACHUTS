@@ -2,7 +2,7 @@
  *  LowPower.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file implements the RACHuTS low power mode.
  */
 
@@ -10,12 +10,12 @@
 
 enum LPStates_t : uint8_t {
     LP_ENTRY = MODE_ENTRY,
-    
+
     // add any desired states between entry and shutdown
     LP_ALERT_MCB,
     LP_CHECK_MCB,
     LP_LOOP,
-    
+
     LP_SHUTDOWN = MODE_SHUTDOWN,
     LP_EXIT = MODE_EXIT
 };
@@ -30,7 +30,7 @@ void StratoPIB::LowPowerMode()
         break;
     case LP_ALERT_MCB:
         log_nominal("Commanding MCB low power");
-        mcbTX.goLow();
+        mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
         scheduler.AddAction(RESEND_MCB_LP, 60);
         inst_substate = LP_CHECK_MCB;
         break;

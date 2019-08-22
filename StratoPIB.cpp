@@ -2,7 +2,7 @@
  *  StratoPIB.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file implements an Arduino library (C++ class) that inherits
  *  from the StratoCore class. It serves as the overarching class
  *  for the RACHuTS Profiler Interface Board, or PIB.
@@ -12,10 +12,8 @@
 
 StratoPIB::StratoPIB()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
-    , mcbTX(&MCB_SERIAL, &Serial)
-    , mcbRX(&MCB_SERIAL, &Serial, DIB) // note: MCB expects DIB due to hard-coded Reader/Writer functions
+    , mcbComm(&MCB_SERIAL)
 {
-    mcbTX.setDevId("DIB"); // note: MCB expects DIB due to hard-coded Reader/Writer functions
     waiting_mcb_messages = 0;
     mcb_low_power = false;
     mcb_motion_finished = false;
@@ -50,28 +48,36 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         SetAction(COMMAND_REEL_OUT); // will be ignored if wrong mode
         break;
     case DEPLOYv:
-        mcbTX.deployV(mcbParam.deployVel); // todo: verification + ack
+        deploy_velocity = mcbParam.deployVel;
         break;
     case DEPLOYa:
-        mcbTX.deployA(mcbParam.deployAcc); // todo: verification + ack
+        mcbComm.TX_Out_Acc(mcbParam.deployAcc); // todo: verification + ack
         break;
     case RETRACTx:
         retract_length = mcbParam.retractLen;
         SetAction(COMMAND_REEL_IN); // will be ignored if wrong mode
         break;
     case RETRACTv:
-        mcbTX.retractV(mcbParam.retractVel); // todo: verification + ack
+        retract_velocity = mcbParam.retractVel;
         break;
     case RETRACTa:
-        mcbTX.retractA(mcbParam.retractAcc); // todo: verification + ack
+        mcbComm.TX_In_Acc(mcbParam.retractAcc); // todo: verification + ack
+        break;
+    case DOCKx:
+        dock_length = mcbParam.dockLen;
+        SetAction(COMMAND_DOCK); // will be ignored if wrong mode
+        break;
+    case DOCKv:
+        dock_velocity = mcbParam.dockVel;
+        break;
+    case DOCKa:
+        mcbComm.TX_Dock_Acc(mcbParam.dockAcc); // todo: verification + ack
         break;
     case FULLRETRACT:
         // todo: determine implementation
         break;
-    // case DOCKx;
-    //     break;
     case CANCELMOTION:
-        mcbTX.cancelMotion(); // no matter what, attempt to send (irrespective of mode)
+        mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(COMMAND_MOTION_STOP);
         break;
     default:
@@ -133,34 +139,43 @@ void StratoPIB::WatchFlags()
     }
 }
 
-void StratoPIB::TakeMCBByte(uint8_t new_byte)
+void StratoPIB::RunMCBRouter()
 {
-    mcbRX.putChar(new_byte);
-    if (new_byte == 3) { // EOF char
-        waiting_mcb_messages++;
+    SerialMessage_t rx_msg = mcbComm.RX();
+
+    while (NO_MESSAGE != rx_msg) {
+        if (ASCII_MESSAGE == rx_msg) {
+            HandleMCBASCII();
+        } else {
+            log_error("Non-ASCII message from MCB");
+        }
+
+        rx_msg = mcbComm.RX();
     }
 }
 
-void StratoPIB::RunMCBRouter()
+void StratoPIB::HandleMCBASCII()
 {
-    if (waiting_mcb_messages) {
-        waiting_mcb_messages--;
-        mcbRX.igetNew();
+    switch (mcbComm.ascii_rx.msg_id) {
+    case MCB_MOTION_FINISHED:
+        log_nominal("MCB motion finished");
+        mcb_motion_finished = true;
+        break;
+    default:
+        log_error("Unknown MCB message received");
+        break;
+    }
+}
 
-        if (mcbRX.dataValid()) {
-            switch (mcb_message) {
-            case LOW_POWER_ACK:
-                log_nominal("MCB in low power");
-                mcb_low_power = true;
-                break;
-            case MOTION_FINISHED:
-                log_nominal("MCB motion finished");
-                mcb_motion_finished = true;
-                break;
-            default:
-                log_error("Unknown MCB message received");
-                break;
-            }
-        }
+void StratoPIB::HandleMCBAck()
+{
+    switch (mcbComm.ack_id) {
+    case MCB_GO_LOW_POWER:
+        log_nominal("MCB in low power");
+        mcb_low_power = true;
+        break;
+    default:
+        log_error("Unknown MCB ack received");
+        break;
     }
 }
