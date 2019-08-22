@@ -2,7 +2,7 @@
  *  EndOfFlight.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file implements the RACHuTS end of flight mode.
  */
 
@@ -10,10 +10,11 @@
 
 enum EFStates_t : uint8_t {
     EF_ENTRY = MODE_ENTRY,
-    
+
     // add any desired states between entry and shutdown
     EF_LOOP,
-    
+
+    EF_ERROR_LANDING = MODE_ERROR,
     EF_SHUTDOWN = MODE_SHUTDOWN,
     EF_EXIT = MODE_EXIT
 };
@@ -32,6 +33,9 @@ void StratoPIB::EndOfFlightMode()
     case EF_LOOP:
         // nominal ops
         log_debug("EF loop");
+        break;
+    case EF_ERROR_LANDING:
+        log_debug("EF error");
         break;
     case EF_SHUTDOWN:
         // prep for shutdown

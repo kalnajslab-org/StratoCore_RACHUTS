@@ -2,7 +2,7 @@
  *  StratoPIB.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  This file implements an Arduino library (C++ class) that inherits
  *  from the StratoCore class. It serves as the overarching class
  *  for the RACHuTS Profiler Interface Board, or PIB.
@@ -12,13 +12,8 @@
 
 StratoPIB::StratoPIB()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
-    , mcbTX(&MCB_SERIAL, &Serial)
-    , mcbRX(&MCB_SERIAL, &Serial, DIB) // note: MCB expects DIB due to hard-coded Reader/Writer functions
+    , mcbComm(&MCB_SERIAL)
 {
-    mcbTX.setDevId("DIB"); // note: MCB expects DIB due to hard-coded Reader/Writer functions
-    waiting_mcb_messages = 0;
-    mcb_low_power = false;
-    mcb_motion_finished = false;
 }
 
 void StratoPIB::InstrumentSetup()
@@ -50,29 +45,53 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         SetAction(COMMAND_REEL_OUT); // will be ignored if wrong mode
         break;
     case DEPLOYv:
-        mcbTX.deployV(mcbParam.deployVel); // todo: verification + ack
+        deploy_velocity = mcbParam.deployVel;
         break;
     case DEPLOYa:
-        mcbTX.deployA(mcbParam.deployAcc); // todo: verification + ack
+        mcbComm.TX_Out_Acc(mcbParam.deployAcc); // todo: verification + ack
         break;
     case RETRACTx:
         retract_length = mcbParam.retractLen;
         SetAction(COMMAND_REEL_IN); // will be ignored if wrong mode
         break;
     case RETRACTv:
-        mcbTX.retractV(mcbParam.retractVel); // todo: verification + ack
+        retract_velocity = mcbParam.retractVel;
         break;
     case RETRACTa:
-        mcbTX.retractA(mcbParam.retractAcc); // todo: verification + ack
+        mcbComm.TX_In_Acc(mcbParam.retractAcc); // todo: verification + ack
+        break;
+    case DOCKx:
+        dock_length = mcbParam.dockLen;
+        SetAction(COMMAND_DOCK); // will be ignored if wrong mode
+        break;
+    case DOCKv:
+        dock_velocity = mcbParam.dockVel;
+        break;
+    case DOCKa:
+        mcbComm.TX_Dock_Acc(mcbParam.dockAcc); // todo: verification + ack
         break;
     case FULLRETRACT:
         // todo: determine implementation
         break;
-    // case DOCKx;
-    //     break;
     case CANCELMOTION:
-        mcbTX.cancelMotion(); // no matter what, attempt to send (irrespective of mode)
+        mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(COMMAND_MOTION_STOP);
+        break;
+    case SETAUTO:
+        if (!mcb_motion_ongoing) {
+            autonomous_mode = true;
+            inst_substate = MODE_ENTRY; // restart FL in auto
+        } else {
+            return false;
+        }
+        break;
+    case SETMANUAL:
+        if (!mcb_motion_ongoing) {
+            autonomous_mode = false;
+            inst_substate = MODE_ENTRY; // restart FL in manual
+        } else {
+            return false;
+        }
         break;
     default:
         log_error("Unknown TC received");
@@ -133,34 +152,109 @@ void StratoPIB::WatchFlags()
     }
 }
 
-void StratoPIB::TakeMCBByte(uint8_t new_byte)
+void StratoPIB::RunMCBRouter()
 {
-    mcbRX.putChar(new_byte);
-    if (new_byte == 3) { // EOF char
-        waiting_mcb_messages++;
+    SerialMessage_t rx_msg = mcbComm.RX();
+
+    while (NO_MESSAGE != rx_msg) {
+        if (ASCII_MESSAGE == rx_msg) {
+            HandleMCBASCII();
+        } else if (ACK_MESSAGE == rx_msg) {
+            HandleMCBAck();
+        } else {
+            log_error("Non-ASCII message from MCB");
+        }
+
+        rx_msg = mcbComm.RX();
     }
 }
 
-void StratoPIB::RunMCBRouter()
+void StratoPIB::HandleMCBASCII()
 {
-    if (waiting_mcb_messages) {
-        waiting_mcb_messages--;
-        mcbRX.igetNew();
-
-        if (mcbRX.dataValid()) {
-            switch (mcb_message) {
-            case LOW_POWER_ACK:
-                log_nominal("MCB in low power");
-                mcb_low_power = true;
-                break;
-            case MOTION_FINISHED:
-                log_nominal("MCB motion finished");
-                mcb_motion_finished = true;
-                break;
-            default:
-                log_error("Unknown MCB message received");
-                break;
-            }
+    switch (mcbComm.ascii_rx.msg_id) {
+    case MCB_MOTION_FINISHED:
+        log_nominal("MCB motion finished");
+        mcb_motion = NO_MOTION;
+        mcb_motion_ongoing = false;
+        break;
+    case MCB_ERROR:
+        if (mcbComm.RX_Error(log_array, 101)) {
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
         }
+        break;
+    case MCB_MOTION_FAULT:
+        if (mcbComm.RX_Motion_Fault(motion_fault, motion_fault+1, motion_fault+2, motion_fault+3,
+                                    motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
+            mcb_motion_ongoing = false;
+            snprintf(log_array, 101, "MCB Fault: %u,%u,%u,%u,%u,%u,%u,%u", motion_fault[0], motion_fault[1],
+                     motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
+        break;
+    default:
+        log_error("Unknown MCB message received");
+        break;
     }
+}
+
+void StratoPIB::HandleMCBAck()
+{
+    switch (mcbComm.ack_id) {
+    case MCB_GO_LOW_POWER:
+        log_nominal("MCB in low power");
+        mcb_low_power = true;
+        break;
+    case MCB_REEL_IN:
+        if (MOTION_REEL_IN == mcb_motion) mcb_motion_ongoing = true;
+        break;
+    case MCB_REEL_OUT:
+        if (MOTION_REEL_OUT == mcb_motion) mcb_motion_ongoing = true;
+        break;
+    case MCB_DOCK:
+        if (MOTION_DOCK == mcb_motion) mcb_motion_ongoing = true;
+        break;
+    case MCB_IN_ACC:
+    case MCB_OUT_ACC:
+    case MCB_DOCK_ACC:
+        // currently not handled, though received
+        break;
+    default:
+        log_error("Unknown MCB ack received");
+        break;
+    }
+}
+
+bool StratoPIB::StartMCBMotion()
+{
+    bool success = false;
+
+    switch (mcb_motion) {
+    case MOTION_REEL_IN:
+        snprintf(log_array, 101, "Retracting %0.1f revs", retract_length);
+        success = mcbComm.TX_Reel_In(retract_length, retract_velocity); // todo: verification
+        break;
+    case MOTION_REEL_OUT:
+        snprintf(log_array, 101, "Deploying %0.1f revs", deploy_length);
+        success = mcbComm.TX_Reel_Out(deploy_length, deploy_velocity); // todo: verification
+        break;
+    case MOTION_DOCK:
+        snprintf(log_array, 101, "Docking %0.1f revs", dock_length);
+        success = mcbComm.TX_Dock(dock_length, dock_velocity); // todo: verification
+        break;
+    case MOTION_UNDOCK:
+    default:
+        mcb_motion = NO_MOTION;
+        log_error("Unknown motion type to start");
+        return false;
+    }
+
+    if (autonomous_mode) {
+        log_nominal(log_array);
+    } else {
+        ZephyrLogFine(log_array);
+    }
+
+    return success;
 }
