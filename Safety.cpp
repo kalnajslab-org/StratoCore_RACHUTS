@@ -37,7 +37,7 @@ void StratoPIB::SafetyMode()
     case SA_SEND_S:
         log_nominal("Sending safety message");
         zephyrTX.S();
-        scheduler.AddAction(RESEND_SAFETY, 60);
+        scheduler.AddAction(RESEND_SAFETY, ZEPHYR_RESEND_TIMEOUT);
         inst_substate = SA_ACK_WAIT;
         break;
     case SA_ACK_WAIT:

@@ -32,7 +32,7 @@ void StratoPIB::LowPowerMode()
     case LP_ALERT_MCB:
         log_nominal("Commanding MCB low power");
         mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
-        scheduler.AddAction(RESEND_MCB_LP, 60);
+        scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
         inst_substate = LP_CHECK_MCB;
         break;
     case LP_CHECK_MCB:

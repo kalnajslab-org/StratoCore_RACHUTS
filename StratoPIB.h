@@ -14,12 +14,18 @@
 #include "StratoCore.h"
 #include "PIBHardware.h"
 #include "PIBBufferGuard.h"
+#include "PIBStorage.h"
 #include "MCBComm.h"
 
 #define INSTRUMENT      RACHUTS
 
 // number of loops before a flag becomes stale and is reset
 #define FLAG_STALE      2
+
+#define MCB_RESEND_TIMEOUT      10
+#define ZEPHYR_RESEND_TIMEOUT   60
+
+#define LOG_ARRAY_SIZE  101
 
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
@@ -31,12 +37,15 @@ enum ScheduleAction_t : uint8_t {
     RESEND_MCB_LP,
     RESEND_RA,
     RESEND_MOTION_COMMAND,
+    EXIT_ERROR_STATE,
 
     // internal command actions
     COMMAND_REEL_OUT,
     COMMAND_REEL_IN,
     COMMAND_DOCK,
     COMMAND_MOTION_STOP,
+    COMMAND_BEGIN_PROFILE,
+    COMMAND_END_DWELL,
 
     // used for tracking
     NUM_ACTIONS
@@ -67,6 +76,9 @@ public:
 private:
     // internal serial interface object for the MCB
     MCBComm mcbComm;
+
+    // EEPROM interface object
+    PIBStorage pibStorage;
 
     // Mode functions (implemented in unique source files)
     void StandbyMode();
@@ -101,6 +113,9 @@ private:
     // Start any type of MCB motion
     bool StartMCBMotion();
 
+    // Schedule profiles in autonomous mode
+    bool ScheduleProfiles();
+
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
     // track the flight mode (autonomous/manual)
@@ -110,25 +125,25 @@ private:
     bool mcb_low_power = false;
     bool mcb_motion_ongoing = false;
 
+    // tracks the number of profiles remaining in autonomous mode
+    uint8_t profiles_remaining = 0;
+
     // tracks the current type of motion
     MCBMotion_t mcb_motion = NO_MOTION;
 
     // tracks if a resend of any message has already been attempted
     bool resend_attempted = false;
 
-    // profile parameters
+    // current profile parameters
     float deploy_length = 0.0f;
-    float deploy_velocity = 250.0f;
     float retract_length = 0.0f;
-    float retract_velocity = 250.0f;
     float dock_length = 0.0f;
-    float dock_velocity = 80.0f;
 
     // array of error values for MCB motion fault
     uint16_t motion_fault[8] = {0};
 
     // keep a statically allocated array for creating up to 100 char TM state messages
-    char log_array[101] = {0};
+    char log_array[LOG_ARRAY_SIZE] = {0};
 };
 
 #endif /* STRATOPIB_H */
