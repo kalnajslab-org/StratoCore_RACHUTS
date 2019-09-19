@@ -42,9 +42,9 @@
 #endif
 
 #ifndef SERIAL3_RX_BUFFER_SIZE
-#error "Need to redefine the Serial3 buffer size to 4096"
-#elif SERIAL3_RX_BUFFER_SIZE != 4096 // todo: optimize this for PU
-#error "Serial3 buffer should be 4096 bytes"
+#error "Need to redefine the Serial3 buffer size to 256"
+#elif SERIAL3_RX_BUFFER_SIZE != 256 // todo: optimize this for PU
+#error "Serial3 buffer should be 256 bytes"
 #endif
 
 #ifndef SERIAL4_RX_BUFFER_SIZE

@@ -16,6 +16,7 @@
 #include "PIBBufferGuard.h"
 #include "PIBStorage.h"
 #include "MCBComm.h"
+#include "PUComm.h"
 
 #define INSTRUMENT      RACHUTS
 
@@ -64,18 +65,20 @@ public:
     StratoPIB();
     ~StratoPIB() { };
 
-    // called before the loop begins
+    // called before the main loop begins
     void InstrumentSetup();
 
-    // called at the end of each loop
+    // called at the end of each main loop
     void InstrumentLoop();
 
-    // called in each loop
+    // called in each main loop
     void RunMCBRouter();
+    void RunPURouter();
 
 private:
-    // internal serial interface object for the MCB
+    // internal serial interface objects for the MCB and PU
     MCBComm mcbComm;
+    PUComm puComm;
 
     // EEPROM interface object
     PIBStorage pibStorage;
@@ -109,12 +112,28 @@ private:
     // Handle messages from the MCB
     void HandleMCBASCII();
     void HandleMCBAck();
+    void HandleMCBBin();
+    uint8_t binary_mcb[50];
+
+    // Handle messages from the PU
+    void HandlePUASCII();
+    void HandlePUAck();
+    void HandlePUBin();
 
     // Start any type of MCB motion
     bool StartMCBMotion();
 
     // Schedule profiles in autonomous mode
     bool ScheduleProfiles();
+
+    // Add an MCB motion TM packet to the binary TM buffer
+    void AddMCBTM();
+
+    // Set variables and TM buffer after a profile starts
+    void NoteProfileStart();
+
+    // Send a telemetry packet with binary info
+    void SendBinaryTM(StateFlag_t state_flag, String message);
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
@@ -127,6 +146,9 @@ private:
 
     // tracks the number of profiles remaining in autonomous mode
     uint8_t profiles_remaining = 0;
+
+    // uint32_t start time of the current profile in millis
+    uint32_t profile_start = 0;
 
     // tracks the current type of motion
     MCBMotion_t mcb_motion = NO_MOTION;

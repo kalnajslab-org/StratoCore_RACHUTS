@@ -13,9 +13,15 @@
 StratoPIB::StratoPIB()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
     , mcbComm(&MCB_SERIAL)
+    , puComm(&PU_SERIAL)
 {
 }
 
+// --------------------------------------------------------
+// General instrument functions
+// --------------------------------------------------------
+
+// note serial setup occurs in main arduino file
 void StratoPIB::InstrumentSetup()
 {
     // for RS232 transceiver
@@ -31,12 +37,18 @@ void StratoPIB::InstrumentSetup()
     if (!pibStorage.LoadFromEEPROM()) {
         ZephyrLogWarn("EEPROM updated");
     }
+
+    mcbComm.AssignBinaryRXBuffer(binary_mcb, 50);
 }
 
 void StratoPIB::InstrumentLoop()
 {
     WatchFlags();
 }
+
+// --------------------------------------------------------
+// Telecommand handler
+// --------------------------------------------------------
 
 // The telecommand handler must return ACK/NAK
 bool StratoPIB::TCHandler(Telecommand_t telecommand)
@@ -237,6 +249,10 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     return true;
 }
 
+// --------------------------------------------------------
+// Action handler and action flag helper functions
+// --------------------------------------------------------
+
 void StratoPIB::ActionHandler(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
@@ -288,6 +304,10 @@ void StratoPIB::WatchFlags()
     }
 }
 
+// --------------------------------------------------------
+// MCB Message Router + Handlers
+// --------------------------------------------------------
+
 void StratoPIB::RunMCBRouter()
 {
     SerialMessage_t rx_msg = mcbComm.RX();
@@ -297,8 +317,10 @@ void StratoPIB::RunMCBRouter()
             HandleMCBASCII();
         } else if (ACK_MESSAGE == rx_msg) {
             HandleMCBAck();
+        } else if (BIN_MESSAGE == rx_msg) {
+            HandleMCBBin();
         } else {
-            log_error("Non-ASCII message from MCB");
+            log_error("Unknown message type from MCB");
         }
 
         rx_msg = mcbComm.RX();
@@ -309,7 +331,7 @@ void StratoPIB::HandleMCBASCII()
 {
     switch (mcbComm.ascii_rx.msg_id) {
     case MCB_MOTION_FINISHED:
-        log_nominal("MCB motion finished");
+        log_nominal("MCB motion finished"); // state machine will report to Zephyr
         mcb_motion_ongoing = false;
         break;
     case MCB_ERROR:
@@ -324,12 +346,16 @@ void StratoPIB::HandleMCBASCII()
             mcb_motion_ongoing = false;
             snprintf(log_array, LOG_ARRAY_SIZE, "MCB Fault: %u,%u,%u,%u,%u,%u,%u,%u", motion_fault[0], motion_fault[1],
                      motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
-            ZephyrLogCrit(log_array);
+            SendBinaryTM(CRIT, log_array);
+            inst_substate = MODE_ERROR;
+        } else {
+            mcb_motion_ongoing = false;
+            SendBinaryTM(CRIT, "MCB Fault: error receiving parameters");
             inst_substate = MODE_ERROR;
         }
         break;
     default:
-        log_error("Unknown MCB message received");
+        log_error("Unknown MCB ASCII message received");
         break;
     }
 }
@@ -342,13 +368,13 @@ void StratoPIB::HandleMCBAck()
         mcb_low_power = true;
         break;
     case MCB_REEL_IN:
-        if (MOTION_REEL_IN == mcb_motion) mcb_motion_ongoing = true;
+        if (MOTION_REEL_IN == mcb_motion) NoteProfileStart();
         break;
     case MCB_REEL_OUT:
-        if (MOTION_REEL_OUT == mcb_motion) mcb_motion_ongoing = true;
+        if (MOTION_REEL_OUT == mcb_motion) NoteProfileStart();
         break;
     case MCB_DOCK:
-        if (MOTION_DOCK == mcb_motion) mcb_motion_ongoing = true;
+        if (MOTION_DOCK == mcb_motion) NoteProfileStart();
         break;
     case MCB_IN_ACC:
     case MCB_OUT_ACC:
@@ -360,6 +386,72 @@ void StratoPIB::HandleMCBAck()
         break;
     }
 }
+
+void StratoPIB::HandleMCBBin()
+{
+    switch (mcbComm.binary_rx.bin_id) {
+    case MCB_MOTION_TM:
+        log_nominal("Received MCB binary");
+        AddMCBTM();
+        break;
+    default:
+        log_error("Unknown MCB bin received");
+    }
+}
+
+// --------------------------------------------------------
+// PU Message Router + Handlers
+// --------------------------------------------------------
+
+void StratoPIB::RunPURouter()
+{
+    SerialMessage_t rx_msg = puComm.RX();
+
+    while (NO_MESSAGE != rx_msg) {
+        if (ASCII_MESSAGE == rx_msg) {
+            HandlePUASCII();
+        } else if (ACK_MESSAGE == rx_msg) {
+            HandlePUAck();
+        } else if (BIN_MESSAGE == rx_msg) {
+            HandlePUBin();
+        } else {
+            log_error("Non-ASCII message from MCB");
+        }
+
+        rx_msg = puComm.RX();
+    }
+}
+
+void StratoPIB::HandlePUASCII()
+{
+    switch (puComm.ascii_rx.msg_id) {
+    default:
+        log_error("Unknown PU ASCII message received");
+        break;
+    }
+}
+
+void StratoPIB::HandlePUAck()
+{
+    switch (puComm.ack_id) {
+    default:
+        log_error("Unknown PU ack received");
+        break;
+    }
+}
+
+void StratoPIB::HandlePUBin()
+{
+    switch (puComm.binary_rx.bin_id) {
+    // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
+    default:
+        log_error("Unknown PU bin received");
+    }
+}
+
+// --------------------------------------------------------
+// Profile helpers
+// --------------------------------------------------------
 
 bool StratoPIB::StartMCBMotion()
 {
@@ -410,4 +502,51 @@ bool StratoPIB::ScheduleProfiles()
     profiles_remaining = pib_config.num_profiles;
 
     return true;
+}
+
+void StratoPIB::AddMCBTM()
+{
+    if (mcbComm.binary_rx.bin_length != MOTION_TM_SIZE) return; // make sure it's the correct size
+
+    // sync byte
+    if (!zephyrTX.addTm((uint8_t) 0xA5)) {
+        log_error("unable to add sync byte to MCB TM buffer");
+        return;
+    }
+
+    // tenths of seconds since start
+    if (!zephyrTX.addTm((uint16_t) ((millis() - profile_start) / 100))) {
+        log_error("unable to add seconds bytes to MCB TM buffer");
+        return;
+    }
+
+    // add each byte of data to the message
+    for (int i = 0; i < MOTION_TM_SIZE; i++) {
+        if (!zephyrTX.addTm(mcbComm.binary_rx.bin_buffer[i])) {
+            log_error("unable to add data byte to MCB TM buffer");
+            return;
+        }
+    }
+}
+
+void StratoPIB::NoteProfileStart()
+{
+    mcb_motion_ongoing = true;
+    profile_start = millis();
+    zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
+
+    // MCB TM Header
+    zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
+    // add to header: profile type, auto vs. manual, auto trigger?
+}
+
+void StratoPIB::SendBinaryTM(StateFlag_t state_flag, String message)
+{
+    // use only the first flag to report the motion
+    zephyrTX.setStateDetails(1, message);
+    zephyrTX.setStateFlagValue(1, state_flag);
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    zephyrTX.TM();
 }

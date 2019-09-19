@@ -208,8 +208,7 @@ void StratoPIB::ManualFlight()
         }
 
         if (!mcb_motion_ongoing) {
-            ZephyrLogFine("Motion complete");
-            // todo: log results
+            SendBinaryTM(FINE, "Finished commanded manual motion");
             inst_substate = FLM_IDLE;
         }
         break;
@@ -314,12 +313,14 @@ void StratoPIB::AutonomousFlight()
         break;
     case FLA_VERIFY_UNDOCK:
         log_debug("FLA verify undock");
-        // todo: is this needed?
+        // todo: is this needed any more with no magnets?
         inst_substate = FL_ERROR_LANDING;
         break;
     case FLA_VERIFY_DOCK:
         log_debug("FLA verify dock");
         // todo: this
+        mcbComm.TX_ASCII(MCB_ZERO_REEL);
+        delay(100);
         mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
         scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
         inst_substate = FLA_MCB_LP_WAIT;
@@ -372,6 +373,7 @@ void StratoPIB::AutonomousFlight()
             log_nominal("Motion complete");
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
+                SendBinaryTM(FINE, "Finished autonomous reel out");
                 if (scheduler.AddAction(COMMAND_END_DWELL, pib_config.dwell_time)) {
                     snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pib_config.dwell_time);
                     log_nominal(log_array);
@@ -382,13 +384,15 @@ void StratoPIB::AutonomousFlight()
                 }
                 break;
             case MOTION_REEL_IN:
+                SendBinaryTM(FINE, "Finished autonomous reel in");
                 inst_substate = FLA_DOCK;
                 break;
             case MOTION_DOCK:
+                SendBinaryTM(FINE, "Finished autonomous dock");
                 inst_substate = FLA_VERIFY_DOCK;
                 break;
             default:
-                ZephyrLogWarn("Unknown motion finished in autonomous monitor");
+                SendBinaryTM(CRIT, "Unknown motion finished in autonomous monitor");
                 inst_substate = FL_ERROR_LANDING;
                 break;
             }
