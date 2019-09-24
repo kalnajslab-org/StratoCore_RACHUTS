@@ -9,6 +9,7 @@
  */
 
 #include "StratoPIB.h"
+#include "Serialize.h"
 
 StratoPIB::StratoPIB()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
@@ -122,6 +123,9 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     case CANCELMOTION:
         mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(COMMAND_MOTION_STOP);
+        break;
+    case ZEROREEL:
+        mcbComm.TX_ASCII(MCB_ZERO_REEL); // todo: verification + ack
         break;
     case SETAUTO:
         if (!mcb_motion_ongoing) {
@@ -389,9 +393,17 @@ void StratoPIB::HandleMCBAck()
 
 void StratoPIB::HandleMCBBin()
 {
+    float reel_pos = 0;
+    uint16_t reel_pos_index = 25; // todo: don't hard-code this
+
     switch (mcbComm.binary_rx.bin_id) {
     case MCB_MOTION_TM:
-        log_nominal("Received MCB binary");
+        if (BufferGetFloat(&reel_pos, mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length, &reel_pos_index)) {
+            snprintf(log_array, 101, "Reel position: %ld", (int32_t) reel_pos);
+            log_nominal(log_array);
+        } else {
+            log_nominal("Recieved MCB bin: unable to read position");
+        }
         AddMCBTM();
         break;
     default:
