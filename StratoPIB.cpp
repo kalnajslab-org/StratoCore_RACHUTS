@@ -348,13 +348,13 @@ void StratoPIB::HandleMCBASCII()
         if (mcbComm.RX_Motion_Fault(motion_fault, motion_fault+1, motion_fault+2, motion_fault+3,
                                     motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
             mcb_motion_ongoing = false;
-            snprintf(log_array, LOG_ARRAY_SIZE, "MCB Fault: %u,%u,%u,%u,%u,%u,%u,%u", motion_fault[0], motion_fault[1],
+            snprintf(log_array, LOG_ARRAY_SIZE, "MCB Fault: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
                      motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
-            SendBinaryTM(CRIT, log_array);
+            SendMCBTM(CRIT, log_array);
             inst_substate = MODE_ERROR;
         } else {
             mcb_motion_ongoing = false;
-            SendBinaryTM(CRIT, "MCB Fault: error receiving parameters");
+            SendMCBTM(CRIT, "MCB Fault: error receiving parameters");
             inst_substate = MODE_ERROR;
         }
         break;
@@ -394,7 +394,7 @@ void StratoPIB::HandleMCBAck()
 void StratoPIB::HandleMCBBin()
 {
     float reel_pos = 0;
-    uint16_t reel_pos_index = 25; // todo: don't hard-code this
+    uint16_t reel_pos_index = 21; // todo: don't hard-code this
 
     switch (mcbComm.binary_rx.bin_id) {
     case MCB_MOTION_TM:
@@ -518,7 +518,11 @@ bool StratoPIB::ScheduleProfiles()
 
 void StratoPIB::AddMCBTM()
 {
-    if (mcbComm.binary_rx.bin_length != MOTION_TM_SIZE) return; // make sure it's the correct size
+    // make sure it's the correct size
+    if (mcbComm.binary_rx.bin_length != MOTION_TM_SIZE) {
+        log_error("invalid motion TM size");
+        return;
+    }
 
     // sync byte
     if (!zephyrTX.addTm((uint8_t) 0xA5)) {
@@ -552,7 +556,7 @@ void StratoPIB::NoteProfileStart()
     // add to header: profile type, auto vs. manual, auto trigger?
 }
 
-void StratoPIB::SendBinaryTM(StateFlag_t state_flag, String message)
+void StratoPIB::SendMCBTM(StateFlag_t state_flag, String message)
 {
     // use only the first flag to report the motion
     zephyrTX.setStateDetails(1, message);
@@ -560,5 +564,10 @@ void StratoPIB::SendBinaryTM(StateFlag_t state_flag, String message)
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);
 
+    TM_ack_flag = NO_ACK;
     zephyrTX.TM();
+
+    if (!WriteFileTM("MCB")) {
+        log_error("Unable to write MCB TM to SD file");
+    }
 }

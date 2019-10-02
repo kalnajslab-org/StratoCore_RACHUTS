@@ -22,6 +22,7 @@ enum FLStates_t : uint8_t {
     FLM_START_MOTION,
     FLM_VERIFY_MOTION,
     FLM_MONITOR_MOTION,
+    FLM_TM_ACK,
 
     // autonomous
     FLA_IDLE,
@@ -198,8 +199,6 @@ void StratoPIB::ManualFlight()
         }
         break;
     case FLM_MONITOR_MOTION:
-        // todo: what should be monitored? Just check for MCB messages?
-
         if (CheckAction(COMMAND_MOTION_STOP)) {
             // todo: verification of motion stop
             ZephyrLogFine("Commanded motion stop");
@@ -208,7 +207,17 @@ void StratoPIB::ManualFlight()
         }
 
         if (!mcb_motion_ongoing) {
-            SendBinaryTM(FINE, "Finished commanded manual motion");
+            SendMCBTM(FINE, "Finished commanded manual motion");
+            inst_substate = FLM_TM_ACK;
+            scheduler.AddAction(RESEND_TM, 10);
+        }
+        break;
+    case FLM_TM_ACK:
+        if (ACK == TM_ack_flag) {
+            inst_substate = FLM_IDLE;
+        } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
+            // attempt one resend
+            zephyrTX.TM();
             inst_substate = FLM_IDLE;
         }
         break;
@@ -373,7 +382,7 @@ void StratoPIB::AutonomousFlight()
             log_nominal("Motion complete");
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
-                SendBinaryTM(FINE, "Finished autonomous reel out");
+                SendMCBTM(FINE, "Finished autonomous reel out");
                 if (scheduler.AddAction(COMMAND_END_DWELL, pib_config.dwell_time)) {
                     snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pib_config.dwell_time);
                     log_nominal(log_array);
@@ -384,15 +393,15 @@ void StratoPIB::AutonomousFlight()
                 }
                 break;
             case MOTION_REEL_IN:
-                SendBinaryTM(FINE, "Finished autonomous reel in");
+                SendMCBTM(FINE, "Finished autonomous reel in");
                 inst_substate = FLA_DOCK;
                 break;
             case MOTION_DOCK:
-                SendBinaryTM(FINE, "Finished autonomous dock");
+                SendMCBTM(FINE, "Finished autonomous dock");
                 inst_substate = FLA_VERIFY_DOCK;
                 break;
             default:
-                SendBinaryTM(CRIT, "Unknown motion finished in autonomous monitor");
+                SendMCBTM(CRIT, "Unknown motion finished in autonomous monitor");
                 inst_substate = FL_ERROR_LANDING;
                 break;
             }

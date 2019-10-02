@@ -38,6 +38,7 @@ enum ScheduleAction_t : uint8_t {
     RESEND_MCB_LP,
     RESEND_RA,
     RESEND_MOTION_COMMAND,
+    RESEND_TM,
     EXIT_ERROR_STATE,
 
     // internal command actions
@@ -132,8 +133,8 @@ private:
     // Set variables and TM buffer after a profile starts
     void NoteProfileStart();
 
-    // Send a telemetry packet with binary info
-    void SendBinaryTM(StateFlag_t state_flag, String message);
+    // Send a telemetry packet with MCB binary info
+    void SendMCBTM(StateFlag_t state_flag, String message);
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
