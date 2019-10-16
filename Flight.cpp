@@ -23,6 +23,8 @@ enum FLStates_t : uint8_t {
     FLM_VERIFY_MOTION,
     FLM_MONITOR_MOTION,
     FLM_TM_ACK,
+    FLM_CHECK_PU,
+    FLM_WAIT_PU,
 
     // autonomous
     FLA_IDLE,
@@ -138,6 +140,18 @@ void StratoPIB::ManualFlight()
             mcb_motion = MOTION_DOCK;
             inst_substate = FLM_SEND_RA;
             resend_attempted = false;
+        } else if (CheckAction(COMMAND_UNDOCK)) {
+            mcb_motion = MOTION_REEL_OUT;
+            inst_substate = FLM_SEND_RA;
+            resend_attempted = false;
+        } else if (CheckAction(COMMAND_REDOCK)) {
+            mcb_motion = MOTION_IN_NO_LW;
+            inst_substate = FLM_SEND_RA;
+            resend_attempted = false;
+        } else if (CheckAction(COMMAND_CHECK_PU)) {
+            inst_substate = FLM_CHECK_PU;
+            pu_docked = false;
+            resend_attempted = false;
         }
         break;
     case FLM_SEND_RA:
@@ -219,6 +233,29 @@ void StratoPIB::ManualFlight()
             // attempt one resend
             zephyrTX.TM();
             inst_substate = FLM_IDLE;
+        }
+        break;
+    case FLM_CHECK_PU:
+        puComm.TX_ASCII(PU_SEND_STATUS);
+        scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
+        inst_substate = FLM_WAIT_PU;
+        break;
+    case FLM_WAIT_PU:
+        if (pu_docked) {
+            log_nominal("PU dock successful");
+            inst_substate = FLM_IDLE;
+            break;
+        }
+
+        if (CheckAction(RESEND_PU_CHECK)) {
+            if (!resend_attempted) {
+                resend_attempted = true;
+                inst_substate = FLM_CHECK_PU;
+            } else {
+                resend_attempted = false;
+                ZephyrLogWarn("PU not responding to status request");
+                inst_substate = FLM_IDLE;
+            }
         }
         break;
     default:

@@ -55,6 +55,7 @@ void StratoPIB::InstrumentLoop()
 bool StratoPIB::TCHandler(Telecommand_t telecommand)
 {
     String dbg_msg = "";
+    log_debug("Received telecommand");
 
     switch (telecommand) {
     case DEPLOYx:
@@ -242,6 +243,31 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             ZephyrLogWarn(log_array);
         }
         break;
+    case RETRYDOCK:
+        if (autonomous_mode) {
+            ZephyrLogWarn("Switch to manual mode before commanding motion");
+            break;
+        }
+        log_nominal("Received retry dock telecommand");
+
+        // schedule each action
+        SetAction(COMMAND_UNDOCK);
+        scheduler.AddAction(COMMAND_REDOCK, 30);
+        scheduler.AddAction(COMMAND_CHECK_PU, 60);
+
+        // set the parameters
+        deploy_length = mcbParam.deployLen;
+        retract_length = mcbParam.retractLen;
+        break;
+    case GETPUSTATUS:
+        if (autonomous_mode) {
+            ZephyrLogWarn("PU Status TC only implemented for manual");
+            break;
+        }
+        log_nominal("Received get PU status TC");
+
+        SetAction(COMMAND_CHECK_PU);
+        break;
     case EXITERROR:
         SetAction(EXIT_ERROR_STATE);
         break;
@@ -345,6 +371,15 @@ void StratoPIB::HandleMCBASCII()
         }
         break;
     case MCB_MOTION_FAULT:
+        // expected if docking
+        if (mcb_dock_ongoing) { // todo: ensure the correct motion fault flags for dock
+            log_nominal("Dock condition detected");
+            mcb_dock_ongoing = false;
+            mcb_motion_ongoing = false;
+            inst_substate = MODE_ENTRY; // re-enter the mode
+            break;
+        }
+
         if (mcbComm.RX_Motion_Fault(motion_fault, motion_fault+1, motion_fault+2, motion_fault+3,
                                     motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
             mcb_motion_ongoing = false;
@@ -379,6 +414,9 @@ void StratoPIB::HandleMCBAck()
         break;
     case MCB_DOCK:
         if (MOTION_DOCK == mcb_motion) NoteProfileStart();
+        break;
+    case MCB_IN_NO_LW:
+        if (MOTION_IN_NO_LW == mcb_motion) NoteProfileStart();
         break;
     case MCB_IN_ACC:
     case MCB_OUT_ACC:
@@ -437,6 +475,9 @@ void StratoPIB::RunPURouter()
 void StratoPIB::HandlePUASCII()
 {
     switch (puComm.ascii_rx.msg_id) {
+    case PU_STATUS:
+        pu_docked = true; // todo: read status info
+        break;
     default:
         log_error("Unknown PU ASCII message received");
         break;
@@ -482,7 +523,10 @@ bool StratoPIB::StartMCBMotion()
         snprintf(log_array, LOG_ARRAY_SIZE, "Docking %0.1f revs", dock_length);
         success = mcbComm.TX_Dock(dock_length, pib_config.dock_velocity); // todo: verification
         break;
-    case MOTION_UNDOCK:
+    case MOTION_IN_NO_LW:
+        snprintf(log_array, LOG_ARRAY_SIZE, "Reel in (no LW) %0.1f revs", retract_length);
+        success = mcbComm.TX_In_No_LW(retract_length, pib_config.dock_velocity); // todo: verification
+        break;
     default:
         mcb_motion = NO_MOTION;
         log_error("Unknown motion type to start");
@@ -549,6 +593,11 @@ void StratoPIB::NoteProfileStart()
 {
     mcb_motion_ongoing = true;
     profile_start = millis();
+
+    if (MOTION_DOCK == mcb_motion || MOTION_IN_NO_LW == mcb_motion) mcb_dock_ongoing = true;
+
+    if (MOTION_REEL_OUT == mcb_motion) pu_docked = false;
+
     zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
 
     // MCB TM Header

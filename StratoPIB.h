@@ -24,9 +24,12 @@
 #define FLAG_STALE      2
 
 #define MCB_RESEND_TIMEOUT      10
+#define PU_RESEND_TIMEOUT       10
 #define ZEPHYR_RESEND_TIMEOUT   60
 
 #define LOG_ARRAY_SIZE  101
+
+#define RETRY_DOCK_LENGTH   2.0f
 
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
@@ -39,6 +42,9 @@ enum ScheduleAction_t : uint8_t {
     RESEND_RA,
     RESEND_MOTION_COMMAND,
     RESEND_TM,
+    RESEND_PU_CHECK,
+
+    // exit the error state (ground command only)
     EXIT_ERROR_STATE,
 
     // internal command actions
@@ -48,6 +54,9 @@ enum ScheduleAction_t : uint8_t {
     COMMAND_MOTION_STOP,
     COMMAND_BEGIN_PROFILE,
     COMMAND_END_DWELL,
+    COMMAND_UNDOCK,
+    COMMAND_REDOCK,
+    COMMAND_CHECK_PU,
 
     // used for tracking
     NUM_ACTIONS
@@ -58,7 +67,7 @@ enum MCBMotion_t : uint8_t {
     MOTION_REEL_IN,
     MOTION_REEL_OUT,
     MOTION_DOCK,
-    MOTION_UNDOCK
+    MOTION_IN_NO_LW
 };
 
 class StratoPIB : public StratoCore {
@@ -144,6 +153,10 @@ private:
     // flags for MCB state tracking
     bool mcb_low_power = false;
     bool mcb_motion_ongoing = false;
+    bool mcb_dock_ongoing = false;
+
+    // flag to track if the PU is attached
+    bool pu_docked = false; // todo: place in EEPROM
 
     // tracks the number of profiles remaining in autonomous mode
     uint8_t profiles_remaining = 0;
