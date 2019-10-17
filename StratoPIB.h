@@ -178,6 +178,14 @@ private:
     // array of error values for MCB motion fault
     uint16_t motion_fault[8] = {0};
 
+    // PU status information
+    uint32_t PUTime = 0;
+    float PUVBattery = 0.0f;
+    float PUICharge = 0.0f;
+    float PUTherm1T = 0.0f;
+    float PUTherm2T = 0.0f;
+    uint8_t PUHeaterStat = 0;
+
     // keep a statically allocated array for creating up to 100 char TM state messages
     char log_array[LOG_ARRAY_SIZE] = {0};
 };

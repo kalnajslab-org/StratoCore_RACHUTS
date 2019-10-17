@@ -242,7 +242,9 @@ void StratoPIB::ManualFlight()
         break;
     case FLM_WAIT_PU:
         if (pu_docked) {
-            log_nominal("PU dock successful");
+            snprintf(log_array, LOG_ARRAY_SIZE, "PU docked: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", PUTime, PUVBattery, PUICharge, PUTherm1T, PUTherm2T, PUHeaterStat);
+            ZephyrLogFine(log_array);
+            mcbComm.TX_ASCII(MCB_ZERO_REEL);
             inst_substate = FLM_IDLE;
             break;
         }
@@ -271,8 +273,13 @@ void StratoPIB::AutonomousFlight()
     case FLA_IDLE:
         log_debug("FL autonomous idle");
 
+        // reset the number of profiles in the middle of the day if using SZA trigger
+        // note: will also be updated by SETTIMETRIGGER TC handler for time trigger case
+        if (pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
+            profiles_remaining = pib_config.num_profiles;
+        }
+
         // if we've reached the right profile trigger, schedule the night's profiles
-        // TODO: fix SZA - will just immediately repeat profiles if Sun still meets limit
         if ((pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle > pib_config.sza_minimum) ||
             (!pib_config.sza_trigger && (uint32_t) now() >= pib_config.time_trigger)) {
             if (ScheduleProfiles()) {
@@ -466,6 +473,7 @@ void StratoPIB::AutonomousFlight()
                 inst_substate = FL_ERROR_LANDING;
             }
         }
+        break;
     case FLA_PU_DOWNLOAD:
         log_debug("FLA PU download");
         snprintf(log_array, LOG_ARRAY_SIZE, "Docked after full profile of %f revs", pib_config.profile_size);
