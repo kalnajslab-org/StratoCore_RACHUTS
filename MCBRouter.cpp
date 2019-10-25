@@ -42,23 +42,30 @@ void StratoPIB::HandleMCBASCII()
         }
         break;
     case MCB_MOTION_FAULT:
-        // expected if docking
-        if (mcb_dock_ongoing) { // todo: ensure the correct motion fault flags for dock
-            log_nominal("Dock condition detected");
-            mcb_dock_ongoing = false;
-            mcb_motion_ongoing = false;
-            inst_substate = MODE_ENTRY; // re-enter the mode
-            break;
-        }
-
         if (mcbComm.RX_Motion_Fault(motion_fault, motion_fault+1, motion_fault+2, motion_fault+3,
                                     motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
+            // expected if docking
+            if (mcb_dock_ongoing) { // todo: ensure the correct motion fault flags for dock
+                snprintf(log_array, LOG_ARRAY_SIZE, "MCB: dock condition detected: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
+                         motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
+                SendMCBTM(FINE, log_array);
+                mcb_dock_ongoing = false;
+                mcb_motion_ongoing = false;
+                return;
+            }
+
             mcb_motion_ongoing = false;
             snprintf(log_array, LOG_ARRAY_SIZE, "MCB Fault: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
                      motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
             SendMCBTM(CRIT, log_array);
             inst_substate = MODE_ERROR;
         } else {
+            if (mcb_dock_ongoing) {
+                SendMCBTM(FINE, "MCB dock detected: error receiving expected fault info");
+                mcb_dock_ongoing = false;
+                mcb_motion_ongoing = false;
+                return;
+            }
             mcb_motion_ongoing = false;
             SendMCBTM(CRIT, "MCB Fault: error receiving parameters");
             inst_substate = MODE_ERROR;

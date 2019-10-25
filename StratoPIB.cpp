@@ -42,7 +42,8 @@ void StratoPIB::InstrumentSetup()
         ZephyrLogWarn("EEPROM updated");
     }
 
-    mcbComm.AssignBinaryRXBuffer(binary_mcb, 50);
+    mcbComm.AssignBinaryRXBuffer(binary_mcb, MCB_BUFFER_SIZE);
+    puComm.AssignBinaryRXBuffer(binary_pu, PU_BUFFER_SIZE);
 }
 
 void StratoPIB::InstrumentLoop()
@@ -155,7 +156,7 @@ bool StratoPIB::ScheduleProfiles()
 
     // schedule the configured number of profiles starting in five seconds
     for (int i = 0; i < pib_config.num_profiles; i++) {
-        if (!scheduler.AddAction(COMMAND_BEGIN_PROFILE, i * pib_config.profile_period + 5)) return false;
+        if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pib_config.profile_period + 5)) return false;
     }
 
     return true;
@@ -197,7 +198,7 @@ void StratoPIB::NoteProfileStart()
 
     if (MOTION_DOCK == mcb_motion || MOTION_IN_NO_LW == mcb_motion) mcb_dock_ongoing = true;
 
-    if (MOTION_REEL_OUT == mcb_motion) pu_docked = false;
+    if (MOTION_REEL_OUT == mcb_motion) EEPROM_UPDATE_BOOL(pibStorage, pu_docked, false);
 
     zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
 
@@ -206,7 +207,7 @@ void StratoPIB::NoteProfileStart()
     // add to header: profile type, auto vs. manual, auto trigger?
 }
 
-void StratoPIB::SendMCBTM(StateFlag_t state_flag, String message)
+void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
 {
     // use only the first flag to report the motion
     zephyrTX.setStateDetails(1, message);
@@ -220,4 +221,48 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, String message)
     if (!WriteFileTM("MCB")) {
         log_error("Unable to write MCB TM to SD file");
     }
+}
+
+void StratoPIB::SendTSENTM()
+{
+    char message[100] = "";
+
+    if (0 < snprintf(message, 100, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", PUTime, PUVBattery, PUICharge, PUTherm1T, PUTherm2T, PUHeaterStat)) {
+        zephyrTX.setStateDetails(1, message);
+        zephyrTX.setStateFlagValue(1, FINE);
+    } else {
+        zephyrTX.setStateDetails(1, "PU TSEN: unable to add status info");
+        zephyrTX.setStateFlagValue(1, WARN);
+    }
+
+    // use only the first flag to report the motion
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    TM_ack_flag = NO_ACK;
+    zephyrTX.TM();
+}
+
+// every 15 minutes, synchronized with the hour
+bool StratoPIB::ScheduleNextTSEN()
+{
+    int32_t temp_seconds = 0;
+    int32_t delta_seconds = 0;
+    TimeElements temp_exact;
+
+    // get the current time in seconds and the TimeElements struct
+    temp_seconds = now();
+    breakTime(temp_seconds, temp_exact);
+
+    // find the number of seconds until the next 15 minute time
+    delta_seconds = (15 - (temp_exact.Minute % 15)) * 60;
+    delta_seconds -= temp_exact.Second;
+
+    // add the number of seconds to the current time
+    temp_seconds += delta_seconds;
+
+    // remake the struct for the exact desired scheduled time
+    breakTime(temp_seconds, temp_exact);
+
+    return scheduler.AddAction(COMMAND_SEND_TSEN, temp_exact);
 }

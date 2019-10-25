@@ -21,7 +21,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             break;
         }
         deploy_length = mcbParam.deployLen;
-        SetAction(COMMAND_REEL_OUT); // will be ignored if wrong mode
+        SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
         break;
     case DEPLOYv:
         if (EEPROM_UPDATE_FLOAT(pibStorage, deploy_velocity, mcbParam.deployVel)) {
@@ -41,7 +41,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             break;
         }
         retract_length = mcbParam.retractLen;
-        SetAction(COMMAND_REEL_IN); // will be ignored if wrong mode
+        SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
         break;
     case RETRACTv:
         if (EEPROM_UPDATE_FLOAT(pibStorage, retract_velocity, mcbParam.retractVel)) {
@@ -61,7 +61,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             break;
         }
         dock_length = mcbParam.dockLen;
-        SetAction(COMMAND_DOCK); // will be ignored if wrong mode
+        SetAction(ACTION_DOCK); // will be ignored if wrong mode
         break;
     case DOCKv:
         if (EEPROM_UPDATE_FLOAT(pibStorage, dock_velocity, mcbParam.dockVel)) {
@@ -80,7 +80,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         break;
     case CANCELMOTION:
         mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
-        SetAction(COMMAND_MOTION_STOP);
+        SetAction(ACTION_MOTION_STOP);
         break;
     case ZEROREEL:
         mcbComm.TX_ASCII(MCB_ZERO_REEL); // todo: verification + ack
@@ -209,22 +209,25 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         log_nominal("Received retry dock telecommand");
 
         // schedule each action
-        SetAction(COMMAND_UNDOCK);
+        SetAction(ACTION_UNDOCK);
         scheduler.AddAction(COMMAND_REDOCK, 30);
-        scheduler.AddAction(COMMAND_CHECK_PU, 60);
+        scheduler.AddAction(ACTION_CHECK_PU, 60);
 
         // set the parameters
         deploy_length = mcbParam.deployLen;
         retract_length = mcbParam.retractLen;
+        send_pu_status = true;
         break;
     case GETPUSTATUS:
         if (autonomous_mode) {
             ZephyrLogWarn("PU Status TC only implemented for manual");
             break;
         }
+
+        send_pu_status = true;
         log_nominal("Received get PU status TC");
 
-        SetAction(COMMAND_CHECK_PU);
+        SetAction(ACTION_CHECK_PU);
         break;
     case PUPOWERON:
         digitalWrite(PU_PWR_ENABLE, HIGH);

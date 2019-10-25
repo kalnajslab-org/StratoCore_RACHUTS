@@ -25,6 +25,8 @@ enum FLStates_t : uint8_t {
     FLM_TM_ACK,
     FLM_CHECK_PU,
     FLM_WAIT_PU,
+    FLM_REQUEST_TSEN,
+    FLM_WAIT_TSEN,
 
     // autonomous
     FLA_IDLE,
@@ -75,6 +77,12 @@ void StratoPIB::FlightMode()
         log_debug("Waiting on GPS time");
         if (time_valid) {
             inst_substate = (autonomous_mode) ? FLA_IDLE : FLM_IDLE;
+            puComm.TX_ASCII(PU_RESET);
+            // todo: reset heater setpoints
+            if (!ScheduleNextTSEN()) {
+                ZephyrLogWarn("Unable to schedule next TSEN read");
+                inst_substate = FL_ERROR_LANDING;
+            }
         }
         break;
     case FL_ERROR_LANDING:
@@ -109,7 +117,7 @@ void StratoPIB::FlightMode()
     case FL_SHUTDOWN_LOOP:
         break;
     case FL_EXIT:
-        // perform cleanup
+        mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
         log_nominal("Exiting FL");
         break;
     default:
@@ -128,19 +136,19 @@ void StratoPIB::ManualFlight()
     switch (inst_substate) {
     case FLM_IDLE:
         log_debug("FL Manual Idle");
-        if (CheckAction(COMMAND_REEL_IN)) {
+        if (CheckAction(ACTION_REEL_IN)) {
             mcb_motion = MOTION_REEL_IN;
             inst_substate = FLM_SEND_RA;
             resend_attempted = false;
-        } else if (CheckAction(COMMAND_REEL_OUT)) {
+        } else if (CheckAction(ACTION_REEL_OUT)) {
             mcb_motion = MOTION_REEL_OUT;
             inst_substate = FLM_SEND_RA;
             resend_attempted = false;
-        } else if (CheckAction(COMMAND_DOCK)) {
+        } else if (CheckAction(ACTION_DOCK)) {
             mcb_motion = MOTION_DOCK;
             inst_substate = FLM_SEND_RA;
             resend_attempted = false;
-        } else if (CheckAction(COMMAND_UNDOCK)) {
+        } else if (CheckAction(ACTION_UNDOCK)) {
             mcb_motion = MOTION_REEL_OUT;
             inst_substate = FLM_SEND_RA;
             resend_attempted = false;
@@ -148,10 +156,15 @@ void StratoPIB::ManualFlight()
             mcb_motion = MOTION_IN_NO_LW;
             inst_substate = FLM_SEND_RA;
             resend_attempted = false;
-        } else if (CheckAction(COMMAND_CHECK_PU)) {
+        } else if (CheckAction(ACTION_CHECK_PU)) {
             inst_substate = FLM_CHECK_PU;
-            pu_docked = false;
             resend_attempted = false;
+        } else if (CheckAction(ACTION_REQUEST_TSEN)) {
+            inst_substate = FLM_REQUEST_TSEN;
+            resend_attempted = false;
+        } else if (CheckAction(COMMAND_SEND_TSEN)) {
+            SetAction(ACTION_CHECK_PU); // read the status
+            scheduler.AddAction(ACTION_REQUEST_TSEN, 30); // then read the binary
         }
         break;
     case FLM_SEND_RA:
@@ -213,7 +226,7 @@ void StratoPIB::ManualFlight()
         }
         break;
     case FLM_MONITOR_MOTION:
-        if (CheckAction(COMMAND_MOTION_STOP)) {
+        if (CheckAction(ACTION_MOTION_STOP)) {
             // todo: verification of motion stop
             ZephyrLogFine("Commanded motion stop");
             inst_substate = FLM_IDLE;
@@ -221,9 +234,11 @@ void StratoPIB::ManualFlight()
         }
 
         if (!mcb_motion_ongoing) {
-            SendMCBTM(FINE, "Finished commanded manual motion");
+            // if docking, the TM will be sent in the MCB fault handler
+            // todo: make sure this message doesn't send if we get a dock condition
+            if (MOTION_DOCK != mcb_motion) SendMCBTM(FINE, "Finished commanded manual motion");
             inst_substate = FLM_TM_ACK;
-            scheduler.AddAction(RESEND_TM, 10);
+            scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
         }
         break;
     case FLM_TM_ACK:
@@ -231,6 +246,7 @@ void StratoPIB::ManualFlight()
             inst_substate = FLM_IDLE;
         } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
             // attempt one resend
+            log_error("Needed to resend TM");
             zephyrTX.TM();
             inst_substate = FLM_IDLE;
         }
@@ -241,9 +257,12 @@ void StratoPIB::ManualFlight()
         inst_substate = FLM_WAIT_PU;
         break;
     case FLM_WAIT_PU:
-        if (pu_docked) {
-            snprintf(log_array, LOG_ARRAY_SIZE, "PU docked: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", PUTime, PUVBattery, PUICharge, PUTherm1T, PUTherm2T, PUHeaterStat);
-            ZephyrLogFine(log_array);
+        if (pib_config.pu_docked) {
+            if (send_pu_status) {
+                send_pu_status = false;
+                snprintf(log_array, LOG_ARRAY_SIZE, "PU docked: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", PUTime, PUVBattery, PUICharge, PUTherm1T, PUTherm2T, PUHeaterStat);
+                ZephyrLogFine(log_array);
+            }
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
             inst_substate = FLM_IDLE;
             break;
@@ -256,10 +275,49 @@ void StratoPIB::ManualFlight()
             } else {
                 resend_attempted = false;
                 ZephyrLogWarn("PU not responding to status request");
+                send_pu_status = false;
                 inst_substate = FLM_IDLE;
             }
         }
         break;
+    case FLM_REQUEST_TSEN:
+        puComm.TX_ASCII(PU_SEND_TSEN_RECORD);
+        scheduler.AddAction(RESEND_PU_TSEN, PU_RESEND_TIMEOUT);
+        tsen_received = false;
+        pu_no_more_records = false;
+        inst_substate = FLM_WAIT_TSEN;
+        break;
+    case FLM_WAIT_TSEN:
+        if (tsen_received) { // ACK/NAK in PURouter
+            tsen_received = false;
+            log_nominal("Received TSEN");
+            SendTSENTM();
+            inst_substate = FLM_TM_ACK;
+            scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
+            if (!ScheduleNextTSEN()) {
+                ZephyrLogWarn("Unable to schedule next TSEN read");
+                inst_substate = FL_ERROR_LANDING;
+            }
+            break;
+        } else if (pu_no_more_records) {
+            pu_no_more_records = false;
+            log_nominal("No more TSEN records");
+            inst_substate = FLM_IDLE;
+        }
+
+        if (CheckAction(RESEND_PU_TSEN)) {
+            if (!resend_attempted) {
+                resend_attempted = true;
+                inst_substate = FLM_REQUEST_TSEN;
+            } else {
+                resend_attempted = false;
+                ZephyrLogWarn("PU not successful in sending TSEN");
+                if (!ScheduleNextTSEN()) {
+                    inst_substate = FL_ERROR_LANDING;
+                }
+                inst_substate = FLM_IDLE;
+            }
+        }
     default:
         ZephyrLogWarn("Unknown manual substate");
         inst_substate = FLM_IDLE;
@@ -298,7 +356,7 @@ void StratoPIB::AutonomousFlight()
             inst_substate = FLA_IDLE;
         }
 
-        if (CheckAction(COMMAND_BEGIN_PROFILE)) {
+        if (CheckAction(ACTION_BEGIN_PROFILE)) {
             log_nominal("Time for scheduled profile");
             profiles_remaining--;
             inst_substate = FLA_SEND_RA;
@@ -415,7 +473,7 @@ void StratoPIB::AutonomousFlight()
         log_debug("FLA monitor motion");
         // todo: what should be monitored? Just check for MCB messages?
 
-        if (CheckAction(COMMAND_MOTION_STOP)) {
+        if (CheckAction(ACTION_MOTION_STOP)) {
             // todo: verification of motion stop
             ZephyrLogWarn("Commanded motion stop in autonomous");
             inst_substate = FL_ERROR_LANDING;
@@ -427,7 +485,7 @@ void StratoPIB::AutonomousFlight()
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
                 SendMCBTM(FINE, "Finished autonomous reel out");
-                if (scheduler.AddAction(COMMAND_END_DWELL, pib_config.dwell_time)) {
+                if (scheduler.AddAction(ACTION_END_DWELL, pib_config.dwell_time)) {
                     snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pib_config.dwell_time);
                     log_nominal(log_array);
                     inst_substate = FLA_DWELL;
@@ -453,7 +511,7 @@ void StratoPIB::AutonomousFlight()
         break;
     case FLA_DWELL:
         log_debug("FLA dwell");
-        if (CheckAction(COMMAND_END_DWELL)) {
+        if (CheckAction(ACTION_END_DWELL)) {
             log_nominal("Finished dwell");
             inst_substate = FLA_REEL_IN;
         }

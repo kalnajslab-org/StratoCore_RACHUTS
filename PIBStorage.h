@@ -12,7 +12,7 @@
 
 #define EEPROM_BASE_ADDRESS     0
 #define EEPROM_MAX_ADDRESS      4095
-#define EEPROM_VERSION          0xAC6F0002 // increment for each version change
+#define EEPROM_VERSION          0xAC6F0003 // increment for each version change
 
 struct PIBConfigs_t {
     uint32_t eeprom_version;
@@ -28,6 +28,7 @@ struct PIBConfigs_t {
     uint16_t profile_period; // seconds
     uint8_t num_profiles; // per night
     bool sza_trigger; // true if SZA triggers profile, false if profile_time
+    bool pu_docked;
 };
 
 extern PIBConfigs_t pib_config; // software copy of EEPROM

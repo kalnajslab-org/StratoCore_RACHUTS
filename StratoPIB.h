@@ -31,6 +31,11 @@
 
 #define RETRY_DOCK_LENGTH   2.0f
 
+#define MCB_BUFFER_SIZE     50
+#define PU_BUFFER_SIZE      8192
+
+#define TSEN_READ_PERIOD    870 // 15 min minus 30 seconds of overhead
+
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
     NO_ACTION = NO_SCHEDULED_ACTION,
@@ -43,20 +48,25 @@ enum ScheduleAction_t : uint8_t {
     RESEND_MOTION_COMMAND,
     RESEND_TM,
     RESEND_PU_CHECK,
+    RESEND_PU_TSEN,
 
     // exit the error state (ground command only)
     EXIT_ERROR_STATE,
 
-    // internal command actions
-    COMMAND_REEL_OUT,
-    COMMAND_REEL_IN,
-    COMMAND_DOCK,
-    COMMAND_MOTION_STOP,
-    COMMAND_BEGIN_PROFILE,
-    COMMAND_END_DWELL,
-    COMMAND_UNDOCK,
-    COMMAND_REDOCK,
-    COMMAND_CHECK_PU,
+    // internal actions
+    ACTION_REEL_OUT,
+    ACTION_REEL_IN,
+    ACTION_DOCK,
+    ACTION_MOTION_STOP,
+    ACTION_BEGIN_PROFILE,
+    ACTION_END_DWELL,
+    ACTION_UNDOCK,
+    ACTION_CHECK_PU,
+    ACTION_REQUEST_TSEN, // send the TSEN request
+
+    // Multi-action commands
+    COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
+    COMMAND_SEND_TSEN, // check PU, request TSEN, send TM
 
     // used for tracking
     NUM_ACTIONS
@@ -123,12 +133,13 @@ private:
     void HandleMCBASCII();
     void HandleMCBAck();
     void HandleMCBBin();
-    uint8_t binary_mcb[50];
+    uint8_t binary_mcb[MCB_BUFFER_SIZE];
 
     // Handle messages from the PU
     void HandlePUASCII();
     void HandlePUAck();
     void HandlePUBin();
+    uint8_t binary_pu[PU_BUFFER_SIZE];
 
     // Start any type of MCB motion
     bool StartMCBMotion();
@@ -143,7 +154,13 @@ private:
     void NoteProfileStart();
 
     // Send a telemetry packet with MCB binary info
-    void SendMCBTM(StateFlag_t state_flag, String message);
+    void SendMCBTM(StateFlag_t state_flag, const char * message);
+
+    // send a telemetry packet with PU TSEN info
+    void SendTSENTM();
+
+    // schedule TSEN packets every 15 minutes synchronized with the hour
+    bool ScheduleNextTSEN();
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
@@ -155,8 +172,10 @@ private:
     bool mcb_motion_ongoing = false;
     bool mcb_dock_ongoing = false;
 
-    // flag to track if the PU is attached
-    bool pu_docked = false; // todo: place in EEPROM
+    // flags for PU state tracking
+    bool tsen_received = false;
+    bool send_pu_status = false;
+    bool pu_no_more_records = false;
 
     // tracks the number of profiles remaining in autonomous mode
     uint8_t profiles_remaining = 0;
