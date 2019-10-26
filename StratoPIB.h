@@ -34,8 +34,6 @@
 #define MCB_BUFFER_SIZE     50
 #define PU_BUFFER_SIZE      8192
 
-#define TSEN_READ_PERIOD    870 // 15 min minus 30 seconds of overhead
-
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
     NO_ACTION = NO_SCHEDULED_ACTION,
@@ -49,6 +47,9 @@ enum ScheduleAction_t : uint8_t {
     RESEND_TM,
     RESEND_PU_CHECK,
     RESEND_PU_TSEN,
+    RESEND_PU_RECORD,
+    RESEND_PU_WARMUP,
+    RESEND_PU_GOPROFILE,
 
     // exit the error state (ground command only)
     EXIT_ERROR_STATE,
@@ -56,13 +57,15 @@ enum ScheduleAction_t : uint8_t {
     // internal actions
     ACTION_REEL_OUT,
     ACTION_REEL_IN,
+    ACTION_IN_NO_LW,
     ACTION_DOCK,
     ACTION_MOTION_STOP,
     ACTION_BEGIN_PROFILE,
     ACTION_END_DWELL,
-    ACTION_UNDOCK,
     ACTION_CHECK_PU,
     ACTION_REQUEST_TSEN, // send the TSEN request
+    ACTION_END_WARMUP,
+    ACTION_END_PREPROFILE,
 
     // Multi-action commands
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
@@ -78,6 +81,16 @@ enum MCBMotion_t : uint8_t {
     MOTION_REEL_OUT,
     MOTION_DOCK,
     MOTION_IN_NO_LW
+};
+
+struct PUStatus_t {
+    uint32_t last_status;
+    uint32_t time;
+    float v_battery;
+    float i_charge;
+    float therm1;
+    float therm2;
+    uint8_t heater_stat;
 };
 
 class StratoPIB : public StratoCore {
@@ -114,6 +127,16 @@ private:
     void AutonomousFlight();
     void ManualFlight();
 
+    // Flight states under autonomous or manual (each in own .cpp file)
+    // when starting the state, call with restart_state = true
+    // then call with restart_state = false until the function returns true meaning it's completed
+    bool Flight_CheckPU(bool restart_state);
+    bool Flight_Profile(bool restart_state);
+    bool Flight_ReDock(bool restart_state);
+    bool Flight_PUOffload(bool restart_state);
+    bool Flight_TSEN(bool restart_state);
+    bool Flight_ManualMotion(bool restart_state);
+
     // Telcommand handler - returns ack/nak
     bool TCHandler(Telecommand_t telecommand);
 
@@ -129,13 +152,13 @@ private:
     // Monitor the action flags and clear old ones
     void WatchFlags();
 
-    // Handle messages from the MCB
+    // Handle messages from the MCB (in MCBRouter.cpp)
     void HandleMCBASCII();
     void HandleMCBAck();
     void HandleMCBBin();
     uint8_t binary_mcb[MCB_BUFFER_SIZE];
 
-    // Handle messages from the PU
+    // Handle messages from the PU (in PURouter.cpp)
     void HandlePUASCII();
     void HandlePUAck();
     void HandlePUBin();
@@ -156,8 +179,9 @@ private:
     // Send a telemetry packet with MCB binary info
     void SendMCBTM(StateFlag_t state_flag, const char * message);
 
-    // send a telemetry packet with PU TSEN info
+    // send a telemetry packet with PU TSEN or Profile Record info
     void SendTSENTM();
+    void SendProfileTM();
 
     // schedule TSEN packets every 15 minutes synchronized with the hour
     bool ScheduleNextTSEN();
@@ -173,21 +197,21 @@ private:
     bool mcb_dock_ongoing = false;
 
     // flags for PU state tracking
+    bool record_received = false;
     bool tsen_received = false;
-    bool send_pu_status = false;
     bool pu_no_more_records = false;
+    bool pu_warmup = false;
+    bool pu_profile = false;
 
-    // tracks the number of profiles remaining in autonomous mode
+    // tracks the number of profiles remaining in autonomous mode and if they're scheduled
     uint8_t profiles_remaining = 0;
+    bool profiles_scheduled = false;
 
     // uint32_t start time of the current profile in millis
     uint32_t profile_start = 0;
 
     // tracks the current type of motion
     MCBMotion_t mcb_motion = NO_MOTION;
-
-    // tracks if a resend of any message has already been attempted
-    bool resend_attempted = false;
 
     // current profile parameters
     float deploy_length = 0.0f;
@@ -198,12 +222,7 @@ private:
     uint16_t motion_fault[8] = {0};
 
     // PU status information
-    uint32_t PUTime = 0;
-    float PUVBattery = 0.0f;
-    float PUICharge = 0.0f;
-    float PUTherm1T = 0.0f;
-    float PUTherm2T = 0.0f;
-    uint8_t PUHeaterStat = 0;
+    PUStatus_t pu_status = {0};
 
     // keep a statically allocated array for creating up to 100 char TM state messages
     char log_array[LOG_ARRAY_SIZE] = {0};

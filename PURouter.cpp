@@ -32,17 +32,25 @@ void StratoPIB::HandlePUASCII()
     switch (puComm.ascii_rx.msg_id) {
     case PU_STATUS:
         EEPROM_UPDATE_BOOL(pibStorage, pu_docked, true);
-        if (!puComm.RX_Status(&PUTime, &PUVBattery, &PUICharge, &PUTherm1T, &PUTherm2T, &PUHeaterStat)) {
-            PUTime = 0;
-            PUVBattery = 0.0f;
-            PUICharge = 0.0f;
-            PUTherm1T = 0.0f;
-            PUTherm2T = 0.0f;
-            PUHeaterStat = 0;
+        if (!puComm.RX_Status(&pu_status.time, &pu_status.v_battery, &pu_status.i_charge, &pu_status.therm1, &pu_status.therm2, &pu_status.heater_stat)) {
+            pu_status.time = 0;
+            pu_status.v_battery = 0.0f;
+            pu_status.i_charge = 0.0f;
+            pu_status.therm1 = 0.0f;
+            pu_status.therm2 = 0.0f;
+            pu_status.heater_stat = 0;
+        } else {
+            pu_status.last_status = now();
         }
         break;
     case PU_NO_MORE_RECORDS:
         pu_no_more_records = true;
+        break;
+    case PU_ERROR:
+        if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
         break;
     default:
         log_error("Unknown PU ASCII message received");
@@ -53,6 +61,12 @@ void StratoPIB::HandlePUASCII()
 void StratoPIB::HandlePUAck()
 {
     switch (puComm.ack_id) {
+    case PU_GO_WARMUP:
+        pu_warmup = true;
+        break;
+    case PU_GO_PROFILE:
+        pu_profile = true;
+        break;
     default:
         log_error("Unknown PU ack received");
         break;
@@ -61,23 +75,40 @@ void StratoPIB::HandlePUAck()
 
 void StratoPIB::HandlePUBin()
 {
-    switch (puComm.binary_rx.bin_id) {
     // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
+    switch (puComm.binary_rx.bin_id) {
     case PU_TSEN_RECORD:
         // prep the TM buffer
         zephyrTX.clearTm();
 
         // see if we can place in the buffer
-        if (zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
+        if (puComm.binary_rx.checksum_valid && zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
             tsen_received = true;
             puComm.TX_Ack(PU_TSEN_RECORD, true);
         } else {
+            log_error("TSEN checksum invalid or error adding to TM buffer");
             puComm.TX_Ack(PU_TSEN_RECORD, false);
             zephyrTX.clearTm();
         }
-
         break;
+
+    case PU_PROFILE_RECORD:
+        // prep the TM buffer
+        zephyrTX.clearTm();
+
+        // see if we can place in the buffer
+        if (puComm.binary_rx.checksum_valid && zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
+            record_received = true;
+            puComm.TX_Ack(PU_TSEN_RECORD, true);
+        } else {
+            log_error("Profile record checksum invalid or error adding to TM buffer");
+            puComm.TX_Ack(PU_TSEN_RECORD, false);
+            zephyrTX.clearTm();
+        }
+        break;
+
     default:
         log_error("Unknown PU bin received");
+        break;
     }
 }

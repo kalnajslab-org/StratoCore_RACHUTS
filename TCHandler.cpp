@@ -209,14 +209,11 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         log_nominal("Received retry dock telecommand");
 
         // schedule each action
-        SetAction(ACTION_UNDOCK);
-        scheduler.AddAction(COMMAND_REDOCK, 30);
-        scheduler.AddAction(ACTION_CHECK_PU, 60);
+        SetAction(COMMAND_REDOCK);
 
         // set the parameters
         deploy_length = mcbParam.deployLen;
         retract_length = mcbParam.retractLen;
-        send_pu_status = true;
         break;
     case GETPUSTATUS:
         if (autonomous_mode) {
@@ -224,7 +221,6 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             break;
         }
 
-        send_pu_status = true;
         log_nominal("Received get PU status TC");
 
         SetAction(ACTION_CHECK_PU);

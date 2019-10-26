@@ -17,41 +17,25 @@ enum FLStates_t : uint8_t {
 
     // manual
     FLM_IDLE,
-    FLM_SEND_RA,
-    FLM_WAIT_RAACK,
-    FLM_START_MOTION,
-    FLM_VERIFY_MOTION,
-    FLM_MONITOR_MOTION,
-    FLM_TM_ACK,
     FLM_CHECK_PU,
-    FLM_WAIT_PU,
-    FLM_REQUEST_TSEN,
-    FLM_WAIT_TSEN,
+    FLM_MANUAL_MOTION,
+    FLM_REDOCK,
+    FLM_TSEN,
+    FLM_PU_OFFLOAD,
 
     // autonomous
     FLA_IDLE,
     FLA_WAIT_PROFILE,
-    FLA_SEND_RA,
-    FLA_WAIT_RAACK,
-    // FLA_MC_WARMUP,
-    FLA_CONFIGURE_PU,
-    FLA_UNDOCK,
-    FLA_REEL_OUT,
-    FLA_REEL_IN,
-    FLA_DOCK,
-    FLA_START_MOTION,
-    FLA_VERIFY_UNDOCK,
-    FLA_VERIFY_DOCK,
-    FLA_VERIFY_MOTION,
-    FLA_MONITOR_MOTION,
-    FLA_DWELL,
-    FLA_MCB_LP_WAIT,
-    FLA_PU_DOWNLOAD,
+    FLA_TSEN,
+    FLA_PROFILE,
+    FLA_PU_OFFLOAD,
+    FLA_NOTE_PROFILE_END,
 
     // general off-nominal states
     FL_ERROR_LOOP,
     FL_SHUTDOWN_LOOP,
 
+    // StratoCore-specified states
     FL_ERROR_LANDING = MODE_ERROR,
     FL_SHUTDOWN_LANDING = MODE_SHUTDOWN,
     FL_EXIT = MODE_EXIT
@@ -77,23 +61,21 @@ void StratoPIB::FlightMode()
         log_debug("Waiting on GPS time");
         if (time_valid) {
             inst_substate = (autonomous_mode) ? FLA_IDLE : FLM_IDLE;
-            puComm.TX_ASCII(PU_RESET);
-            // todo: reset heater setpoints
             if (!ScheduleNextTSEN()) {
-                ZephyrLogWarn("Unable to schedule next TSEN read");
+                ZephyrLogCrit("Unable to schedule next TSEN read");
                 inst_substate = FL_ERROR_LANDING;
             }
         }
         break;
     case FL_ERROR_LANDING:
         log_error("Landed in flight error");
+        scheduler.ClearSchedule();
         mcb_motion_ongoing = false;
         profiles_remaining = 0;
         mcb_motion = NO_MOTION;
-        resend_attempted = false;
         mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
         scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
-        mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
+        mcb_low_power = false;
         inst_substate = FL_ERROR_LOOP;
         break;
     case FL_ERROR_LOOP:
@@ -138,410 +120,142 @@ void StratoPIB::ManualFlight()
         log_debug("FL Manual Idle");
         if (CheckAction(ACTION_REEL_IN)) {
             mcb_motion = MOTION_REEL_IN;
-            inst_substate = FLM_SEND_RA;
-            resend_attempted = false;
+            Flight_ManualMotion(true);
+            inst_substate = FLM_MANUAL_MOTION;
         } else if (CheckAction(ACTION_REEL_OUT)) {
             mcb_motion = MOTION_REEL_OUT;
-            inst_substate = FLM_SEND_RA;
-            resend_attempted = false;
+            Flight_ManualMotion(true);
+            inst_substate = FLM_MANUAL_MOTION;
         } else if (CheckAction(ACTION_DOCK)) {
             mcb_motion = MOTION_DOCK;
-            inst_substate = FLM_SEND_RA;
-            resend_attempted = false;
-        } else if (CheckAction(ACTION_UNDOCK)) {
-            mcb_motion = MOTION_REEL_OUT;
-            inst_substate = FLM_SEND_RA;
-            resend_attempted = false;
+            Flight_ManualMotion(true);
+            inst_substate = FLM_MANUAL_MOTION;
+        } else if (CheckAction(ACTION_CHECK_PU)) {
+            Flight_CheckPU(true);
+            inst_substate = FLM_CHECK_PU;
         } else if (CheckAction(COMMAND_REDOCK)) {
             mcb_motion = MOTION_IN_NO_LW;
-            inst_substate = FLM_SEND_RA;
-            resend_attempted = false;
-        } else if (CheckAction(ACTION_CHECK_PU)) {
-            inst_substate = FLM_CHECK_PU;
-            resend_attempted = false;
-        } else if (CheckAction(ACTION_REQUEST_TSEN)) {
-            inst_substate = FLM_REQUEST_TSEN;
-            resend_attempted = false;
+            Flight_ReDock(true);
+            inst_substate = FLM_REDOCK;
         } else if (CheckAction(COMMAND_SEND_TSEN)) {
-            SetAction(ACTION_CHECK_PU); // read the status
-            scheduler.AddAction(ACTION_REQUEST_TSEN, 30); // then read the binary
-        }
-        break;
-    case FLM_SEND_RA:
-        RA_ack_flag = NO_ACK;
-        zephyrTX.RA();
-        inst_substate = FLM_WAIT_RAACK;
-        scheduler.AddAction(RESEND_RA, ZEPHYR_RESEND_TIMEOUT);
-        log_nominal("Sending RA");
-        break;
-    case FLM_WAIT_RAACK:
-        if (ACK == RA_ack_flag) {
-            inst_substate = FLM_START_MOTION;
-            resend_attempted = false;
-            log_nominal("RA ACK");
-        } else if (NAK == RA_ack_flag) {
-            inst_substate = FLM_IDLE;
-            resend_attempted = false;
-            ZephyrLogWarn("Cannot perform motion, RA NAK");
-        } else if (CheckAction(RESEND_RA)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                inst_substate = FLM_SEND_RA;
-            } else {
-                ZephyrLogWarn("Never received RAAck");
-                resend_attempted = false;
-                inst_substate = FLM_IDLE;
-            }
-        }
-        break;
-    case FLM_START_MOTION:
-        if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Motion commanded while motion ongoing");
-            inst_substate = FL_ERROR_LANDING;
-        }
-
-        if (StartMCBMotion()) {
-            inst_substate = FLM_VERIFY_MOTION;
-            scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
-        } else {
-            ZephyrLogWarn("Motion start error");
-            inst_substate = FL_ERROR_LANDING;
-        }
-        break;
-    case FLM_VERIFY_MOTION:
-        if (mcb_motion_ongoing) { // set in the Ack handler
-            log_nominal("MCB commanded motion");
-            inst_substate = FLM_MONITOR_MOTION;
-        }
-
-        if (CheckAction(RESEND_MOTION_COMMAND)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                inst_substate = FLM_START_MOTION;
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("MCB never confirmed motion");
-                inst_substate = FL_ERROR_LANDING;
-            }
-        }
-        break;
-    case FLM_MONITOR_MOTION:
-        if (CheckAction(ACTION_MOTION_STOP)) {
-            // todo: verification of motion stop
-            ZephyrLogFine("Commanded motion stop");
-            inst_substate = FLM_IDLE;
-            break;
-        }
-
-        if (!mcb_motion_ongoing) {
-            // if docking, the TM will be sent in the MCB fault handler
-            // todo: make sure this message doesn't send if we get a dock condition
-            if (MOTION_DOCK != mcb_motion) SendMCBTM(FINE, "Finished commanded manual motion");
-            inst_substate = FLM_TM_ACK;
-            scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
-        }
-        break;
-    case FLM_TM_ACK:
-        if (ACK == TM_ack_flag) {
-            inst_substate = FLM_IDLE;
-        } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
-            // attempt one resend
-            log_error("Needed to resend TM");
-            zephyrTX.TM();
-            inst_substate = FLM_IDLE;
+            Flight_TSEN(true);
+            inst_substate = FLM_TSEN;
         }
         break;
     case FLM_CHECK_PU:
-        puComm.TX_ASCII(PU_SEND_STATUS);
-        scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
-        inst_substate = FLM_WAIT_PU;
-        break;
-    case FLM_WAIT_PU:
-        if (pib_config.pu_docked) {
-            if (send_pu_status) {
-                send_pu_status = false;
-                snprintf(log_array, LOG_ARRAY_SIZE, "PU docked: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", PUTime, PUVBattery, PUICharge, PUTherm1T, PUTherm2T, PUHeaterStat);
-                ZephyrLogFine(log_array);
-            }
-            mcbComm.TX_ASCII(MCB_ZERO_REEL);
+        if (Flight_CheckPU(false)) {
             inst_substate = FLM_IDLE;
-            break;
         }
-
-        if (CheckAction(RESEND_PU_CHECK)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                inst_substate = FLM_CHECK_PU;
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("PU not responding to status request");
-                send_pu_status = false;
-                inst_substate = FLM_IDLE;
-            }
+    case FLM_MANUAL_MOTION:
+        if (Flight_ManualMotion(false)) {
+            inst_substate = FLM_IDLE;
         }
         break;
-    case FLM_REQUEST_TSEN:
-        puComm.TX_ASCII(PU_SEND_TSEN_RECORD);
-        scheduler.AddAction(RESEND_PU_TSEN, PU_RESEND_TIMEOUT);
-        tsen_received = false;
-        pu_no_more_records = false;
-        inst_substate = FLM_WAIT_TSEN;
+    case FLM_REDOCK:
+        if (Flight_ReDock(false)) {
+            inst_substate = FLM_IDLE;
+        }
         break;
-    case FLM_WAIT_TSEN:
-        if (tsen_received) { // ACK/NAK in PURouter
-            tsen_received = false;
-            log_nominal("Received TSEN");
-            SendTSENTM();
-            inst_substate = FLM_TM_ACK;
-            scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
+    case FLM_TSEN:
+        if (Flight_TSEN(false)) {
+            inst_substate = FLM_IDLE;
             if (!ScheduleNextTSEN()) {
-                ZephyrLogWarn("Unable to schedule next TSEN read");
+                ZephyrLogCrit("Unable to schedule next TSEN read");
                 inst_substate = FL_ERROR_LANDING;
             }
-            break;
-        } else if (pu_no_more_records) {
-            pu_no_more_records = false;
-            log_nominal("No more TSEN records");
+        }
+        break;
+    case FLM_PU_OFFLOAD:
+        if (!Flight_PUOffload(false)) {
             inst_substate = FLM_IDLE;
         }
-
-        if (CheckAction(RESEND_PU_TSEN)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                inst_substate = FLM_REQUEST_TSEN;
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("PU not successful in sending TSEN");
-                if (!ScheduleNextTSEN()) {
-                    inst_substate = FL_ERROR_LANDING;
-                }
-                inst_substate = FLM_IDLE;
-            }
-        }
     default:
-        ZephyrLogWarn("Unknown manual substate");
-        inst_substate = FLM_IDLE;
+        log_error("Unknown manual substate");
         break;
-    }
+    };
 }
 
 void StratoPIB::AutonomousFlight()
 {
     switch (inst_substate) {
     case FLA_IDLE:
-        log_debug("FL autonomous idle");
-
-        // reset the number of profiles in the middle of the day if using SZA trigger
-        // note: will also be updated by SETTIMETRIGGER TC handler for time trigger case
-        if (pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
+        if (0 == profiles_remaining && zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
             profiles_remaining = pib_config.num_profiles;
-        }
-
-        // if we've reached the right profile trigger, schedule the night's profiles
-        if ((pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle > pib_config.sza_minimum) ||
-            (!pib_config.sza_trigger && (uint32_t) now() >= pib_config.time_trigger)) {
-            if (ScheduleProfiles()) {
-                ZephyrLogFine("Starting profiles for the night");
+            profiles_scheduled = false;
+        } else if (0 != profiles_remaining && pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle > pib_config.sza_minimum) {
+            if (profiles_scheduled) {
+                inst_substate = FLA_WAIT_PROFILE;
+            } else if (ScheduleProfiles()) {
+                profiles_scheduled = true;
+                ZephyrLogFine("Scheduled nightly SZA profiles");
                 inst_substate = FLA_WAIT_PROFILE;
             } else {
-                ZephyrLogWarn("Error scheduling autonomous profiles");
+                ZephyrLogCrit("Error scheduling SZA profiles");
+                inst_substate = FL_ERROR_LANDING;
+            }
+        } else if (0 != profiles_remaining && !pib_config.sza_trigger && (uint32_t) now() >= pib_config.time_trigger) {
+            if (profiles_scheduled) {
+                inst_substate = FLA_WAIT_PROFILE;
+            } else if (ScheduleProfiles()) {
+                profiles_scheduled = true;
+                ZephyrLogFine("Scheduled nightly time-trigger profiles");
+                inst_substate = FLA_WAIT_PROFILE;
+            } else {
+                ZephyrLogCrit("Error scheduling time-trigger profiles");
+                inst_substate = FL_ERROR_LANDING;
+            }
+        } else if (CheckAction(COMMAND_SEND_TSEN)) {
+            Flight_TSEN(true);
+            inst_substate = FLA_TSEN;
+        }
+        break;
+
+    case FLA_WAIT_PROFILE:
+        if (CheckAction(ACTION_BEGIN_PROFILE)) {
+            Flight_Profile(true);
+            inst_substate = FLA_PROFILE;
+        } else if (CheckAction(COMMAND_SEND_TSEN)) {
+            Flight_TSEN(true);
+            inst_substate = FLA_TSEN;
+        }
+        break;
+
+    case FLA_TSEN:
+        if (Flight_TSEN(false)) {
+            inst_substate = FLA_IDLE;
+            if (!ScheduleNextTSEN()) {
+                ZephyrLogCrit("Unable to schedule next TSEN read");
                 inst_substate = FL_ERROR_LANDING;
             }
         }
         break;
-    case FLA_WAIT_PROFILE:
-        log_debug("FLA wait profile");
-        if (0 == profiles_remaining) {
-            log_nominal("Finished with profiles for the night");
+
+    case FLA_PROFILE:
+        if (Flight_Profile(false)) {
+            Flight_PUOffload(true);
+            inst_substate = FLA_PU_OFFLOAD;
+        }
+        break;
+
+    case FLA_PU_OFFLOAD:
+        if (Flight_PUOffload(false)) {
+            inst_substate = FLA_NOTE_PROFILE_END;
+        }
+        break;
+
+    case FLA_NOTE_PROFILE_END:
+        if (profiles_remaining != 0) profiles_remaining--;
+
+        if (!ScheduleNextTSEN()) {
+            ZephyrLogCrit("Unable to schedule next TSEN read");
+            inst_substate = FL_ERROR_LANDING;
+        } else {
             inst_substate = FLA_IDLE;
         }
+        break;
 
-        if (CheckAction(ACTION_BEGIN_PROFILE)) {
-            log_nominal("Time for scheduled profile");
-            profiles_remaining--;
-            inst_substate = FLA_SEND_RA;
-        }
-        break;
-    case FLA_SEND_RA:
-        RA_ack_flag = NO_ACK;
-        zephyrTX.RA();
-        inst_substate = FLA_WAIT_RAACK;
-        scheduler.AddAction(RESEND_RA, ZEPHYR_RESEND_TIMEOUT);
-        log_nominal("Sending RA");
-        break;
-    case FLA_WAIT_RAACK:
-        log_debug("FLA wait RA Ack");
-        if (ACK == RA_ack_flag) {
-            inst_substate = FLA_CONFIGURE_PU;
-            resend_attempted = false;
-            log_nominal("RA ACK");
-        } else if (NAK == RA_ack_flag) {
-            inst_substate = FLA_WAIT_PROFILE; // todo, if NAK'ed, just abort profile and wait for the next?
-            resend_attempted = false;
-            ZephyrLogWarn("Cannot perform motion, RA NAK");
-        } else if (CheckAction(RESEND_RA)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                inst_substate = FLA_SEND_RA;
-            } else {
-                ZephyrLogWarn("Never received RAAck");
-                resend_attempted = false;
-                inst_substate = FLA_WAIT_PROFILE;
-            }
-        }
-        break;
-    // case FLA_MC_WARMUP:
-    case FLA_CONFIGURE_PU:
-        log_debug("FLA configure PU");
-        // todo: this
-        inst_substate = FLA_REEL_OUT;
-        break;
-    case FLA_UNDOCK:
-        log_debug("FLA undock");
-        // todo: is this state needed?
-        inst_substate = FL_ERROR_LANDING;
-        break;
-    case FLA_REEL_OUT:
-        log_debug("FLA reel out");
-        mcb_motion = MOTION_REEL_OUT;
-        deploy_length = pib_config.profile_size;
-        inst_substate = FLA_START_MOTION;
-        resend_attempted = false;
-        break;
-    case FLA_REEL_IN:
-        log_debug("FLA reel in");
-        mcb_motion = MOTION_REEL_IN;
-        retract_length = pib_config.profile_size - pib_config.dock_amount;
-        inst_substate = FLA_START_MOTION;
-        resend_attempted = false;
-        break;
-    case FLA_DOCK:
-        log_debug("FLA dock");
-        mcb_motion = MOTION_DOCK;
-        dock_length = pib_config.dock_amount + pib_config.dock_overshoot;
-        inst_substate = FLA_START_MOTION;
-        resend_attempted = false;
-        break;
-    case FLA_VERIFY_UNDOCK:
-        log_debug("FLA verify undock");
-        // todo: is this needed any more with no magnets?
-        inst_substate = FL_ERROR_LANDING;
-        break;
-    case FLA_VERIFY_DOCK:
-        log_debug("FLA verify dock");
-        // todo: this
-        mcbComm.TX_ASCII(MCB_ZERO_REEL);
-        delay(100);
-        mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
-        scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
-        inst_substate = FLA_MCB_LP_WAIT;
-        break;
-    case FLA_START_MOTION:
-        log_debug("FLA start motion");
-        if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Motion commanded while motion ongoing");
-            inst_substate = FL_ERROR_LANDING;
-        }
-
-        if (StartMCBMotion()) {
-            inst_substate = FLA_VERIFY_MOTION;
-            scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
-        } else {
-            ZephyrLogWarn("Motion start error");
-            inst_substate = FL_ERROR_LANDING;
-        }
-        break;
-    case FLA_VERIFY_MOTION:
-        log_debug("FLA verify motion");
-        if (mcb_motion_ongoing) { // set in the Ack handler
-            log_nominal("MCB commanded motion");
-            inst_substate = FLA_MONITOR_MOTION;
-        }
-
-        if (CheckAction(RESEND_MOTION_COMMAND)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                inst_substate = FLA_START_MOTION;
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("MCB never confirmed motion");
-                inst_substate = FL_ERROR_LANDING;
-            }
-        }
-        break;
-    case FLA_MONITOR_MOTION:
-        log_debug("FLA monitor motion");
-        // todo: what should be monitored? Just check for MCB messages?
-
-        if (CheckAction(ACTION_MOTION_STOP)) {
-            // todo: verification of motion stop
-            ZephyrLogWarn("Commanded motion stop in autonomous");
-            inst_substate = FL_ERROR_LANDING;
-            break;
-        }
-
-        if (!mcb_motion_ongoing) {
-            log_nominal("Motion complete");
-            switch (mcb_motion) {
-            case MOTION_REEL_OUT:
-                SendMCBTM(FINE, "Finished autonomous reel out");
-                if (scheduler.AddAction(ACTION_END_DWELL, pib_config.dwell_time)) {
-                    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pib_config.dwell_time);
-                    log_nominal(log_array);
-                    inst_substate = FLA_DWELL;
-                } else {
-                    ZephyrLogCrit("Unable to schedule dwell");
-                    inst_substate = FL_ERROR_LANDING;
-                }
-                break;
-            case MOTION_REEL_IN:
-                SendMCBTM(FINE, "Finished autonomous reel in");
-                inst_substate = FLA_DOCK;
-                break;
-            case MOTION_DOCK:
-                SendMCBTM(FINE, "Finished autonomous dock");
-                inst_substate = FLA_VERIFY_DOCK;
-                break;
-            default:
-                SendMCBTM(CRIT, "Unknown motion finished in autonomous monitor");
-                inst_substate = FL_ERROR_LANDING;
-                break;
-            }
-        }
-        break;
-    case FLA_DWELL:
-        log_debug("FLA dwell");
-        if (CheckAction(ACTION_END_DWELL)) {
-            log_nominal("Finished dwell");
-            inst_substate = FLA_REEL_IN;
-        }
-        break;
-    case FLA_MCB_LP_WAIT:
-        if (mcb_low_power) {
-            log_nominal("MCB in low power after profile");
-            mcb_low_power = false;
-            inst_substate = FLA_PU_DOWNLOAD;
-        } else if (CheckAction(RESEND_MCB_LP)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("MCB never powered off after profile");
-                inst_substate = FL_ERROR_LANDING;
-            }
-        }
-        break;
-    case FLA_PU_DOWNLOAD:
-        log_debug("FLA PU download");
-        snprintf(log_array, LOG_ARRAY_SIZE, "Docked after full profile of %f revs", pib_config.profile_size);
-        ZephyrLogFine(log_array);
-        // todo: actual PU code
-        inst_substate = FLA_WAIT_PROFILE;
-        break;
     default:
-        ZephyrLogWarn("Unknown autonomous substate");
-        inst_substate = FLA_IDLE;
+        log_error("Unknown autonomous substate");
         break;
-    }
+    };
 }

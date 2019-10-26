@@ -225,13 +225,29 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
 
 void StratoPIB::SendTSENTM()
 {
-    char message[100] = "";
-
-    if (0 < snprintf(message, 100, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", PUTime, PUVBattery, PUICharge, PUTherm1T, PUTherm2T, PUHeaterStat)) {
-        zephyrTX.setStateDetails(1, message);
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {
+        zephyrTX.setStateDetails(1, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {
         zephyrTX.setStateDetails(1, "PU TSEN: unable to add status info");
+        zephyrTX.setStateFlagValue(1, WARN);
+    }
+
+    // use only the first flag to report the motion
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    TM_ack_flag = NO_ACK;
+    zephyrTX.TM();
+}
+
+void StratoPIB::SendProfileTM()
+{
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU Profile Record: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {
+        zephyrTX.setStateDetails(1, log_array);
+        zephyrTX.setStateFlagValue(1, FINE);
+    } else {
+        zephyrTX.setStateDetails(1, "PU Profile Record: unable to add status info");
         zephyrTX.setStateFlagValue(1, WARN);
     }
 
