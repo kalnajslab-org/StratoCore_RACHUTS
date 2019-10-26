@@ -117,19 +117,20 @@ bool StratoPIB::StartMCBMotion()
     switch (mcb_motion) {
     case MOTION_REEL_IN:
         snprintf(log_array, LOG_ARRAY_SIZE, "Retracting %0.1f revs", retract_length);
-        success = mcbComm.TX_Reel_In(retract_length, pib_config.retract_velocity); // todo: verification
+        success = mcbComm.TX_Reel_In(retract_length, pib_config.retract_velocity);
         break;
     case MOTION_REEL_OUT:
+        PUUndock();
         snprintf(log_array, LOG_ARRAY_SIZE, "Deploying %0.1f revs", deploy_length);
-        success = mcbComm.TX_Reel_Out(deploy_length, pib_config.deploy_velocity); // todo: verification
+        success = mcbComm.TX_Reel_Out(deploy_length, pib_config.deploy_velocity);
         break;
     case MOTION_DOCK:
         snprintf(log_array, LOG_ARRAY_SIZE, "Docking %0.1f revs", dock_length);
-        success = mcbComm.TX_Dock(dock_length, pib_config.dock_velocity); // todo: verification
+        success = mcbComm.TX_Dock(dock_length, pib_config.dock_velocity);
         break;
     case MOTION_IN_NO_LW:
         snprintf(log_array, LOG_ARRAY_SIZE, "Reel in (no LW) %0.1f revs", retract_length);
-        success = mcbComm.TX_In_No_LW(retract_length, pib_config.dock_velocity); // todo: verification
+        success = mcbComm.TX_In_No_LW(retract_length, pib_config.dock_velocity);
         break;
     default:
         mcb_motion = NO_MOTION;
@@ -150,15 +151,21 @@ bool StratoPIB::ScheduleProfiles()
 {
     // no matter the trigger, reset the time_trigger to the max value, new TC needed to set new value
     if (!EEPROM_UPDATE_UINT32(pibStorage, time_trigger, UINT32_MAX)) {
-        // should never happen, probably should reset
+        ZephyrLogCrit("Error scheduling profiles, EEPROM failure");
         return false;
     }
 
     // schedule the configured number of profiles starting in five seconds
     for (int i = 0; i < pib_config.num_profiles; i++) {
-        if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pib_config.profile_period + 5)) return false;
+        if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pib_config.profile_period + 5)) {
+            ZephyrLogCrit("Error scheduling profiles, scheduler failure");
+            return false;
+        }
     }
 
+    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled profiles: %u, %0.2f, %0.2f, %0.2f, %u, %u", pib_config.num_profiles, pib_config.profile_size,
+             pib_config.dock_amount, pib_config.dock_overshoot, pib_config.dwell_time, pib_config.profile_period);
+    ZephyrLogFine(log_array);
     return true;
 }
 
@@ -198,8 +205,6 @@ void StratoPIB::NoteProfileStart()
 
     if (MOTION_DOCK == mcb_motion || MOTION_IN_NO_LW == mcb_motion) mcb_dock_ongoing = true;
 
-    if (MOTION_REEL_OUT == mcb_motion) EEPROM_UPDATE_BOOL(pibStorage, pu_docked, false);
-
     zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
 
     // MCB TM Header
@@ -217,6 +222,8 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
 
     TM_ack_flag = NO_ACK;
     zephyrTX.TM();
+
+    log_nominal(log_array);
 
     if (!WriteFileTM("MCB")) {
         log_error("Unable to write MCB TM to SD file");
@@ -239,6 +246,8 @@ void StratoPIB::SendTSENTM()
 
     TM_ack_flag = NO_ACK;
     zephyrTX.TM();
+
+    log_nominal(log_array);
 }
 
 void StratoPIB::SendProfileTM()
@@ -257,6 +266,8 @@ void StratoPIB::SendProfileTM()
 
     TM_ack_flag = NO_ACK;
     zephyrTX.TM();
+
+    log_nominal(log_array);
 }
 
 // every 15 minutes, synchronized with the hour
@@ -281,4 +292,24 @@ bool StratoPIB::ScheduleNextTSEN()
     breakTime(temp_seconds, temp_exact);
 
     return scheduler.AddAction(COMMAND_SEND_TSEN, temp_exact);
+}
+
+void StratoPIB::PUDock()
+{
+    EEPROM_UPDATE_BOOL(pibStorage, pu_docked, true);
+    digitalWrite(PU_PWR_ENABLE, HIGH);
+}
+
+void StratoPIB::PUUndock()
+{
+    EEPROM_UPDATE_BOOL(pibStorage, pu_docked, false);
+    digitalWrite(PU_PWR_ENABLE, LOW);
+}
+
+void StratoPIB::PUStartProfile()
+{
+    int32_t t_down = 60 * (deploy_length / pib_config.deploy_velocity) + PREPROFILE_PERIOD;
+    int32_t t_up = 60 * (retract_length / pib_config.retract_velocity + dock_length / pib_config.dock_velocity);
+
+    puComm.TX_Profile(t_down, pib_config.dwell_time, t_up, 1, 10, 1, 1, 1);
 }

@@ -13,6 +13,7 @@ void StratoPIB::RunPURouter()
     SerialMessage_t rx_msg = puComm.RX();
 
     while (NO_MESSAGE != rx_msg) {
+        PUDock();
         if (ASCII_MESSAGE == rx_msg) {
             HandlePUASCII();
         } else if (ACK_MESSAGE == rx_msg) {
@@ -20,7 +21,7 @@ void StratoPIB::RunPURouter()
         } else if (BIN_MESSAGE == rx_msg) {
             HandlePUBin();
         } else {
-            log_error("Non-ASCII message from MCB");
+            log_error("Unknown message type from PU");
         }
 
         rx_msg = puComm.RX();
@@ -31,8 +32,7 @@ void StratoPIB::HandlePUASCII()
 {
     switch (puComm.ascii_rx.msg_id) {
     case PU_STATUS:
-        EEPROM_UPDATE_BOOL(pibStorage, pu_docked, true);
-        if (!puComm.RX_Status(&pu_status.time, &pu_status.v_battery, &pu_status.i_charge, &pu_status.therm1, &pu_status.therm2, &pu_status.heater_stat)) {
+        if (!puComm.ascii_rx.checksum_valid || !puComm.RX_Status(&pu_status.time, &pu_status.v_battery, &pu_status.i_charge, &pu_status.therm1, &pu_status.therm2, &pu_status.heater_stat)) {
             pu_status.time = 0;
             pu_status.v_battery = 0.0f;
             pu_status.i_charge = 0.0f;
@@ -62,9 +62,11 @@ void StratoPIB::HandlePUAck()
 {
     switch (puComm.ack_id) {
     case PU_GO_WARMUP:
+        log_nominal("PU in warmup");
         pu_warmup = true;
         break;
     case PU_GO_PROFILE:
+        log_nominal("PU in profile");
         pu_profile = true;
         break;
     default:

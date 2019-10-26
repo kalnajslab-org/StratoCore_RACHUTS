@@ -21,7 +21,7 @@
 #define INSTRUMENT      RACHUTS
 
 // number of loops before a flag becomes stale and is reset
-#define FLAG_STALE      2
+#define FLAG_STALE      3
 
 #define MCB_RESEND_TIMEOUT      10
 #define PU_RESEND_TIMEOUT       10
@@ -33,6 +33,9 @@
 
 #define MCB_BUFFER_SIZE     50
 #define PU_BUFFER_SIZE      8192
+
+#define WARMUP_PERIOD       60//0 // 15 min nominal (TODO: fix from test values)
+#define PREPROFILE_PERIOD   30//0 // 3 min nominal (TODO: fix from test values)
 
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
@@ -66,10 +69,13 @@ enum ScheduleAction_t : uint8_t {
     ACTION_REQUEST_TSEN, // send the TSEN request
     ACTION_END_WARMUP,
     ACTION_END_PREPROFILE,
+    ACTION_OVERRIDE_TSEN, // if TSEN in manual, override for command
+    ACTION_OFFLOAD_PU,
 
     // Multi-action commands
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
     COMMAND_SEND_TSEN, // check PU, request TSEN, send TM
+    COMMAND_MANUAL_PROFILE,
 
     // used for tracking
     NUM_ACTIONS
@@ -185,6 +191,13 @@ private:
 
     // schedule TSEN packets every 15 minutes synchronized with the hour
     bool ScheduleNextTSEN();
+
+    // call every time the known state of the PU changes
+    void PUDock();
+    void PUUndock();
+
+    // PU start profile command generation and transmit
+    void PUStartProfile();
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 

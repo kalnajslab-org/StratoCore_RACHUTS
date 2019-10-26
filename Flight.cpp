@@ -22,6 +22,7 @@ enum FLStates_t : uint8_t {
     FLM_REDOCK,
     FLM_TSEN,
     FLM_PU_OFFLOAD,
+    FLM_PROFILE,
 
     // autonomous
     FLA_IDLE,
@@ -119,43 +120,62 @@ void StratoPIB::ManualFlight()
     case FLM_IDLE:
         log_debug("FL Manual Idle");
         if (CheckAction(ACTION_REEL_IN)) {
+            log_nominal("Reel in manual command");
             mcb_motion = MOTION_REEL_IN;
             Flight_ManualMotion(true);
             inst_substate = FLM_MANUAL_MOTION;
         } else if (CheckAction(ACTION_REEL_OUT)) {
+            log_nominal("Reel out manual command");
             mcb_motion = MOTION_REEL_OUT;
             Flight_ManualMotion(true);
             inst_substate = FLM_MANUAL_MOTION;
         } else if (CheckAction(ACTION_DOCK)) {
+            log_nominal("Dock manual command");
             mcb_motion = MOTION_DOCK;
             Flight_ManualMotion(true);
             inst_substate = FLM_MANUAL_MOTION;
         } else if (CheckAction(ACTION_CHECK_PU)) {
+            log_nominal("Check PU manual command");
             Flight_CheckPU(true);
             inst_substate = FLM_CHECK_PU;
         } else if (CheckAction(COMMAND_REDOCK)) {
+            log_nominal("Redock manual command");
             mcb_motion = MOTION_IN_NO_LW;
             Flight_ReDock(true);
             inst_substate = FLM_REDOCK;
         } else if (CheckAction(COMMAND_SEND_TSEN)) {
+            log_nominal("Send TSEN manual command");
             Flight_TSEN(true);
             inst_substate = FLM_TSEN;
+        } else if (CheckAction(COMMAND_MANUAL_PROFILE)) {
+            log_nominal("Profile manual command");
+            Flight_Profile(true);
+            inst_substate = FLM_PROFILE;
+        } else if (CheckAction(ACTION_OFFLOAD_PU)) {
+            log_nominal("Offload PU Manual");
+            Flight_PUOffload(true);
+            inst_substate = FLM_PU_OFFLOAD;
         }
         break;
+
     case FLM_CHECK_PU:
         if (Flight_CheckPU(false)) {
             inst_substate = FLM_IDLE;
         }
+        break;
+
     case FLM_MANUAL_MOTION:
         if (Flight_ManualMotion(false)) {
             inst_substate = FLM_IDLE;
         }
         break;
+
     case FLM_REDOCK:
         if (Flight_ReDock(false)) {
             inst_substate = FLM_IDLE;
         }
         break;
+
     case FLM_TSEN:
         if (Flight_TSEN(false)) {
             inst_substate = FLM_IDLE;
@@ -165,10 +185,19 @@ void StratoPIB::ManualFlight()
             }
         }
         break;
+
     case FLM_PU_OFFLOAD:
-        if (!Flight_PUOffload(false)) {
+        if (Flight_PUOffload(false)) {
             inst_substate = FLM_IDLE;
         }
+        break;
+
+    case FLM_PROFILE:
+        if (Flight_Profile(false)) {
+            inst_substate = FLM_IDLE;
+        }
+        break;
+
     default:
         log_error("Unknown manual substate");
         break;
@@ -185,23 +214,19 @@ void StratoPIB::AutonomousFlight()
         } else if (0 != profiles_remaining && pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle > pib_config.sza_minimum) {
             if (profiles_scheduled) {
                 inst_substate = FLA_WAIT_PROFILE;
-            } else if (ScheduleProfiles()) {
+            } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
                 profiles_scheduled = true;
-                ZephyrLogFine("Scheduled nightly SZA profiles");
                 inst_substate = FLA_WAIT_PROFILE;
             } else {
-                ZephyrLogCrit("Error scheduling SZA profiles");
                 inst_substate = FL_ERROR_LANDING;
             }
         } else if (0 != profiles_remaining && !pib_config.sza_trigger && (uint32_t) now() >= pib_config.time_trigger) {
             if (profiles_scheduled) {
                 inst_substate = FLA_WAIT_PROFILE;
-            } else if (ScheduleProfiles()) {
+            } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
                 profiles_scheduled = true;
-                ZephyrLogFine("Scheduled nightly time-trigger profiles");
                 inst_substate = FLA_WAIT_PROFILE;
             } else {
-                ZephyrLogCrit("Error scheduling time-trigger profiles");
                 inst_substate = FL_ERROR_LANDING;
             }
         } else if (CheckAction(COMMAND_SEND_TSEN)) {

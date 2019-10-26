@@ -6,24 +6,32 @@
 
 #include "StratoPIB.h"
 
-enum InternalStates_t {
+enum PUOffloadStates_t {
     ST_ENTRY,
+    ST_GET_PU_STATUS,
     ST_REQUEST_PACKET,
     ST_WAIT_PACKET,
     ST_TM_ACK,
 };
 
-static InternalStates_t internal_state = ST_ENTRY;
+static PUOffloadStates_t puoffload_state = ST_ENTRY;
 static bool resend_attempted = false;
 
 bool StratoPIB::Flight_PUOffload(bool restart_state)
 {
-    if (restart_state) internal_state = ST_ENTRY;
+    if (restart_state) puoffload_state = ST_ENTRY;
 
-    switch (internal_state) {
+    switch (puoffload_state) {
     case ST_ENTRY:
         resend_attempted = false;
-        internal_state = ST_REQUEST_PACKET;
+        Flight_CheckPU(true);
+        puoffload_state = ST_GET_PU_STATUS;
+        break;
+
+    case ST_GET_PU_STATUS:
+        if (Flight_CheckPU(false)) {
+            puoffload_state = ST_REQUEST_PACKET;
+        }
         break;
 
     case ST_REQUEST_PACKET:
@@ -31,7 +39,7 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
         scheduler.AddAction(RESEND_PU_RECORD, PU_RESEND_TIMEOUT);
         record_received = false;
         pu_no_more_records = false;
-        internal_state = ST_WAIT_PACKET;
+        puoffload_state = ST_WAIT_PACKET;
         break;
 
     case ST_WAIT_PACKET:
@@ -39,7 +47,7 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
             record_received = false;
             log_nominal("Received profile record");
             SendProfileTM();
-            internal_state = ST_TM_ACK;
+            puoffload_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
             break;
         } else if (pu_no_more_records) {
@@ -51,22 +59,23 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
         if (CheckAction(RESEND_PU_RECORD)) {
             if (!resend_attempted) {
                 resend_attempted = true;
-                internal_state = ST_REQUEST_PACKET;
+                puoffload_state = ST_REQUEST_PACKET;
             } else {
                 resend_attempted = false;
                 ZephyrLogWarn("PU not successful in sending profile record");
                 return true;
             }
         }
+        break;
 
     case ST_TM_ACK:
         if (ACK == TM_ack_flag) {
-            internal_state = ST_ENTRY;
+            puoffload_state = ST_ENTRY;
         } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
             // attempt one resend
             log_error("Needed to resend TM");
             zephyrTX.TM(); // message is still saved in XMLWriter, no need to reconstruct
-            internal_state = ST_ENTRY;
+            puoffload_state = ST_ENTRY;
         }
         break;
 

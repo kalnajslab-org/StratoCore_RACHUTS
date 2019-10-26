@@ -6,7 +6,7 @@
 
 #include "StratoPIB.h"
 
-enum InternalStates_t {
+enum ReDockStates_t {
     ST_ENTRY,
     ST_IDLE,
     ST_START_MOTION,
@@ -16,16 +16,16 @@ enum InternalStates_t {
     ST_WAIT_PU,
 };
 
-static InternalStates_t internal_state = ST_ENTRY;
+static ReDockStates_t redock_state = ST_ENTRY;
 static bool resend_attempted = false;
 
 bool StratoPIB::Flight_ReDock(bool restart_state)
 {
-    if (restart_state) internal_state = ST_ENTRY;
+    if (restart_state) redock_state = ST_ENTRY;
 
-    switch (internal_state) {
+    switch (redock_state) {
     case ST_ENTRY:
-        internal_state = ST_IDLE;
+        redock_state = ST_IDLE;
         SetAction(ACTION_REEL_OUT);
         scheduler.AddAction(ACTION_IN_NO_LW, 30);
         scheduler.AddAction(ACTION_CHECK_PU, 60);
@@ -33,17 +33,18 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
 
     case ST_IDLE:
         if (CheckAction(ACTION_REEL_OUT)) {
-            internal_state = ST_START_MOTION;
+            redock_state = ST_START_MOTION;
             mcb_motion = MOTION_REEL_OUT;
             resend_attempted = false;
         } else if (CheckAction(ACTION_IN_NO_LW)) {
-            internal_state = ST_START_MOTION;
+            redock_state = ST_START_MOTION;
             mcb_motion = MOTION_IN_NO_LW;
             resend_attempted = false;
         } else if (CheckAction(ACTION_CHECK_PU)) {
-            internal_state = ST_CHECK_PU;
+            redock_state = ST_CHECK_PU;
             resend_attempted = false;
         }
+        break;
 
     case ST_START_MOTION:
         if (mcb_motion_ongoing) {
@@ -52,7 +53,7 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
         }
 
         if (StartMCBMotion()) {
-            inst_substate = ST_VERIFY_MOTION;
+            redock_state = ST_VERIFY_MOTION;
             scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
         } else {
             ZephyrLogWarn("Motion start error");
@@ -63,13 +64,13 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
     case ST_VERIFY_MOTION:
         if (mcb_motion_ongoing) { // set in the Ack handler
             log_nominal("MCB commanded motion");
-            inst_substate = ST_MONITOR_MOTION;
+            redock_state = ST_MONITOR_MOTION;
         }
 
         if (CheckAction(RESEND_MOTION_COMMAND)) {
             if (!resend_attempted) {
                 resend_attempted = true;
-                inst_substate = ST_START_MOTION;
+                redock_state = ST_START_MOTION;
             } else {
                 resend_attempted = false;
                 ZephyrLogWarn("MCB never confirmed motion");
@@ -87,14 +88,14 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
         }
 
         if (!mcb_motion_ongoing) {
-            scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
+            redock_state = ST_IDLE;
         }
         break;
 
     case ST_CHECK_PU:
         puComm.TX_ASCII(PU_SEND_STATUS);
         scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
-        inst_substate = ST_WAIT_PU;
+        redock_state = ST_WAIT_PU;
         break;
 
     case ST_WAIT_PU:
@@ -109,7 +110,7 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
         if (CheckAction(RESEND_PU_CHECK)) {
             if (!resend_attempted) {
                 resend_attempted = true;
-                inst_substate = ST_CHECK_PU;
+                redock_state = ST_CHECK_PU;
             } else {
                 resend_attempted = false;
                 ZephyrLogWarn("PU not responding to status request");
