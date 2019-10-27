@@ -37,8 +37,6 @@ bool StratoPIB::Flight_CheckPU(bool restart_state)
     case ST_WAIT_REQUEST:
         if (last_pu_status != pu_status.last_status) {
             resend_attempted = false;
-            snprintf(log_array, LOG_ARRAY_SIZE, "PU status: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat);
-            ZephyrLogFine(log_array);
             return true;
         }
 

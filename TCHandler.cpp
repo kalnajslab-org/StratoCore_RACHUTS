@@ -253,7 +253,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, profile_size, pibParam.profileSize);
         tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, dock_amount, pibParam.dockAmount);
         tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, dock_overshoot, pibParam.dockOvershoot);
-        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, dwell_time, pibParam.dwellTime);
+        tc_success &= EEPROM_UPDATE_UINT16(pibStorage, dwell_time, pibParam.dwellTime);
 
         if (!tc_success) {
             ZephyrLogCrit("Error setting manual profile parameters");

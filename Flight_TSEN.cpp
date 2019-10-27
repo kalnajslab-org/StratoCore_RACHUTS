@@ -8,6 +8,7 @@
 
 enum TSENStates_t {
     ST_ENTRY,
+    ST_GET_PU_STATUS,
     ST_REQUEST_TSEN,
     ST_WAIT_TSEN,
     ST_TM_ACK,
@@ -31,7 +32,14 @@ bool StratoPIB::Flight_TSEN(bool restart_state)
     switch (tsen_state) {
     case ST_ENTRY:
         resend_attempted = false;
-        tsen_state = ST_REQUEST_TSEN;
+        Flight_CheckPU(true);
+        tsen_state = ST_GET_PU_STATUS;
+        break;
+
+    case ST_GET_PU_STATUS:
+        if (Flight_CheckPU(false)) {
+            tsen_state = ST_REQUEST_TSEN;
+        }
         break;
 
     case ST_REQUEST_TSEN:
@@ -45,7 +53,8 @@ bool StratoPIB::Flight_TSEN(bool restart_state)
     case ST_WAIT_TSEN:
         if (tsen_received) { // ACK/NAK in PURouter
             tsen_received = false;
-            log_nominal("Received TSEN");
+            snprintf(log_array, LOG_ARRAY_SIZE, "Received TSEN: %u", puComm.binary_rx.bin_length);
+            log_nominal(log_array);
             SendTSENTM();
             tsen_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);

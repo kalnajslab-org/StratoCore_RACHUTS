@@ -21,6 +21,7 @@ enum ProfileStates_t {
     ST_REEL_OUT,
     ST_DWELL,
     ST_REEL_IN,
+    ST_DOCK_WAIT,
     ST_DOCK,
     ST_GET_PU_STATUS,
     ST_VERIFY_DOCK,
@@ -158,6 +159,13 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         resend_attempted = false;
         break;
 
+    case ST_DOCK_WAIT:
+        // wait for the timeout set for the reel out or the backup action, whichever comes first
+        if (CheckAction(ACTION_MOTION_TIMEOUT) || CheckAction(ACTION_END_DOCK_WAIT)) {
+            profile_state = ST_DOCK;
+        }
+        break;
+
     case ST_DOCK:
         log_debug("FLA dock");
         mcb_motion = MOTION_DOCK;
@@ -219,6 +227,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         log_debug("FLA verify motion");
         if (mcb_motion_ongoing) { // set in the Ack handler
             log_nominal("MCB commanded motion");
+            scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
             profile_state = ST_MONITOR_MOTION;
         }
 
@@ -244,11 +253,18 @@ bool StratoPIB::Flight_Profile(bool restart_state)
             break;
         }
 
+        if (CheckAction(ACTION_MOTION_TIMEOUT)) {
+            ZephyrLogCrit("MCB Motion took longer than expected");
+            mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
+            inst_substate = MODE_ERROR; // will force exit of Flight_Profile
+            break;
+        }
+
         if (!mcb_motion_ongoing) {
             log_nominal("Motion complete");
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
-                SendMCBTM(FINE, "Finished autonomous reel out");
+                SendMCBTM(FINE, "Finished profile reel out");
                 if (scheduler.AddAction(ACTION_END_DWELL, pib_config.dwell_time)) {
                     snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pib_config.dwell_time);
                     log_nominal(log_array);
@@ -259,17 +275,18 @@ bool StratoPIB::Flight_Profile(bool restart_state)
                 }
                 break;
             case MOTION_REEL_IN:
-                SendMCBTM(FINE, "Finished autonomous reel in");
-                profile_state = ST_DOCK;
+                SendMCBTM(FINE, "Finished profile reel in");
+                scheduler.AddAction(ACTION_END_DOCK_WAIT, 60);
+                profile_state = ST_DOCK_WAIT;
                 break;
             case MOTION_DOCK:
-                SendMCBTM(FINE, "Finished autonomous dock");
+                SendMCBTM(FINE, "Finished profile dock");
                 redock_count = 0;
                 Flight_CheckPU(true); // start checking the PU
                 profile_state = ST_GET_PU_STATUS;
                 break;
             default:
-                SendMCBTM(CRIT, "Unknown motion finished in autonomous monitor");
+                SendMCBTM(CRIT, "Unknown motion finished in profile monitor");
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
                 break;
             }

@@ -45,7 +45,8 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
     case ST_WAIT_PACKET:
         if (record_received) { // ACK/NAK in PURouter
             record_received = false;
-            log_nominal("Received profile record");
+            snprintf(log_array, LOG_ARRAY_SIZE, "Received profile record: %u", puComm.binary_rx.bin_length);
+            log_nominal(log_array);
             SendProfileTM();
             puoffload_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);

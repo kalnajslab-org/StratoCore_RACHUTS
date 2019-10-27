@@ -42,6 +42,9 @@ void StratoPIB::HandleMCBASCII()
         }
         break;
     case MCB_MOTION_FAULT:
+        // if flag already cleared, assume this is the repeat
+        if (!mcb_motion_ongoing) return;
+
         if (mcbComm.RX_Motion_Fault(motion_fault, motion_fault+1, motion_fault+2, motion_fault+3,
                                     motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
             // expected if docking

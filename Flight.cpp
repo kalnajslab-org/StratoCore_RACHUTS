@@ -160,6 +160,8 @@ void StratoPIB::ManualFlight()
 
     case FLM_CHECK_PU:
         if (Flight_CheckPU(false)) {
+            snprintf(log_array, LOG_ARRAY_SIZE, "PU status: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat);
+            ZephyrLogFine(log_array);
             inst_substate = FLM_IDLE;
         }
         break;
@@ -195,6 +197,10 @@ void StratoPIB::ManualFlight()
     case FLM_PROFILE:
         if (Flight_Profile(false)) {
             inst_substate = FLM_IDLE;
+            if (!ScheduleNextTSEN()) {
+                ZephyrLogCrit("Unable to schedule next TSEN read");
+                inst_substate = FL_ERROR_LANDING;
+            }
         }
         break;
 
@@ -208,7 +214,7 @@ void StratoPIB::AutonomousFlight()
 {
     switch (inst_substate) {
     case FLA_IDLE:
-        if (0 == profiles_remaining && zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
+        if (zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
             profiles_remaining = pib_config.num_profiles;
             profiles_scheduled = false;
         } else if (0 != profiles_remaining && pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle > pib_config.sza_minimum) {

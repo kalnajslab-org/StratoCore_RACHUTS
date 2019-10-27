@@ -118,19 +118,23 @@ bool StratoPIB::StartMCBMotion()
     case MOTION_REEL_IN:
         snprintf(log_array, LOG_ARRAY_SIZE, "Retracting %0.1f revs", retract_length);
         success = mcbComm.TX_Reel_In(retract_length, pib_config.retract_velocity);
+        max_profile_seconds = 60 * (retract_length / pib_config.retract_velocity) + 30;
         break;
     case MOTION_REEL_OUT:
         PUUndock();
         snprintf(log_array, LOG_ARRAY_SIZE, "Deploying %0.1f revs", deploy_length);
         success = mcbComm.TX_Reel_Out(deploy_length, pib_config.deploy_velocity);
+        max_profile_seconds = 60 * (deploy_length / pib_config.deploy_velocity) + 30;
         break;
     case MOTION_DOCK:
         snprintf(log_array, LOG_ARRAY_SIZE, "Docking %0.1f revs", dock_length);
         success = mcbComm.TX_Dock(dock_length, pib_config.dock_velocity);
+        max_profile_seconds = 60 * (dock_length / pib_config.dock_velocity) + 30;
         break;
     case MOTION_IN_NO_LW:
         snprintf(log_array, LOG_ARRAY_SIZE, "Reel in (no LW) %0.1f revs", retract_length);
         success = mcbComm.TX_In_No_LW(retract_length, pib_config.dock_velocity);
+        max_profile_seconds = 60 * (retract_length / pib_config.dock_velocity) + 30;
         break;
     default:
         mcb_motion = NO_MOTION;

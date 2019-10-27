@@ -71,6 +71,8 @@ enum ScheduleAction_t : uint8_t {
     ACTION_END_PREPROFILE,
     ACTION_OVERRIDE_TSEN, // if TSEN in manual, override for command
     ACTION_OFFLOAD_PU,
+    ACTION_MOTION_TIMEOUT,
+    ACTION_END_DOCK_WAIT,
 
     // Multi-action commands
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
@@ -208,6 +210,7 @@ private:
     bool mcb_low_power = false;
     bool mcb_motion_ongoing = false;
     bool mcb_dock_ongoing = false;
+    uint32_t max_profile_seconds = 0;
 
     // flags for PU state tracking
     bool record_received = false;
