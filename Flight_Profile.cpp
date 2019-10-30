@@ -79,7 +79,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
 
     case ST_SET_PU_WARMUP:
         pu_warmup = false;
-        puComm.TX_WarmUp(-20.0f,0.0f,-15.0f,1,1); // TODO: get proper parameters
+        puComm.TX_WarmUp(pib_config.flash_temp,pib_config.heater1_temp,pib_config.heater2_temp,pib_config.flash_power,pib_config.tsen_power);
         scheduler.AddAction(RESEND_PU_WARMUP, PU_RESEND_TIMEOUT);
         profile_state = ST_CONFIRM_PU_WARMUP;
         break;
@@ -87,7 +87,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_CONFIRM_PU_WARMUP:
         if (pu_warmup) {
             profile_state = ST_WARMUP;
-            scheduler.AddAction(ACTION_END_WARMUP, WARMUP_PERIOD);
+            scheduler.AddAction(ACTION_END_WARMUP, pib_config.puwarmup_time);
         } else if (CheckAction(RESEND_PU_WARMUP)) {
             if (!resend_attempted) {
                 resend_attempted = true;
@@ -114,6 +114,9 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         break;
 
     case ST_SET_PU_PROFILE:
+        retract_length = pib_config.profile_size - pib_config.dock_amount;
+        deploy_length = pib_config.profile_size;
+        dock_length = pib_config.dock_amount + pib_config.dock_overshoot;
         pu_profile = false;
         PUStartProfile();
         scheduler.AddAction(RESEND_PU_GOPROFILE, PU_RESEND_TIMEOUT);
@@ -123,7 +126,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_CONFIRM_PU_PROFILE:
         if (pu_profile) {
             profile_state = ST_PREPROFILE_WAIT;
-            scheduler.AddAction(ACTION_END_PREPROFILE, PREPROFILE_PERIOD);
+            scheduler.AddAction(ACTION_END_PREPROFILE, pib_config.preprofile_time);
         } else if (CheckAction(RESEND_PU_GOPROFILE)) {
             if (!resend_attempted) {
                 resend_attempted = true;
@@ -146,7 +149,6 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_REEL_OUT:
         log_debug("FLA reel out");
         mcb_motion = MOTION_REEL_OUT;
-        deploy_length = pib_config.profile_size;
         profile_state = ST_START_MOTION;
         resend_attempted = false;
         break;
@@ -154,7 +156,6 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_REEL_IN:
         log_debug("FLA reel in");
         mcb_motion = MOTION_REEL_IN;
-        retract_length = pib_config.profile_size - pib_config.dock_amount;
         profile_state = ST_START_MOTION;
         resend_attempted = false;
         break;
@@ -169,7 +170,6 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_DOCK:
         log_debug("FLA dock");
         mcb_motion = MOTION_DOCK;
-        dock_length = pib_config.dock_amount + pib_config.dock_overshoot;
         profile_state = ST_START_MOTION;
         resend_attempted = false;
         break;
@@ -188,12 +188,12 @@ bool StratoPIB::Flight_Profile(bool restart_state)
             scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
             profile_state = ST_CONFIRM_MCB_LP;
         } else {
-            if (3 == ++redock_count) { // TODO: configurable? Don't hard-code
+            if (pib_config.num_redock == ++redock_count) {
                 ZephyrLogCrit("Two redock failures");
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             } else {
-                deploy_length = 5; // TODO: don't hard-code these
-                retract_length = 10;
+                deploy_length = pib_config.redock_out;
+                retract_length = pib_config.redock_in;
                 Flight_ReDock(true);
                 profile_state = ST_REDOCK;
             }
@@ -247,7 +247,6 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         log_debug("FLA monitor motion");
 
         if (CheckAction(ACTION_MOTION_STOP)) {
-            // todo: verification of motion stop
             ZephyrLogWarn("Commanded motion stop in autonomous");
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;

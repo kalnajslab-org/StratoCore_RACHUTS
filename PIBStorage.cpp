@@ -40,6 +40,22 @@ void PIBStorage::ReconfigureEEPROM() {
     pib_config.num_profiles = 3;
     pib_config.sza_trigger = false;
     pib_config.pu_docked = false;
+    pib_config.redock_out = 5;
+    pib_config.redock_in = 10;
+    pib_config.num_redock = 3;
+    pib_config.puwarmup_time = 900; // 15 min
+    pib_config.preprofile_time = 180; // 3 min
+    pib_config.flash_temp = -20.0f;
+    pib_config.heater1_temp = 0.0f;
+    pib_config.heater2_temp = -15.f;
+    pib_config.flash_power = 1;
+    pib_config.tsen_power = 1;
+    pib_config.profile_rate = 1;
+    pib_config.dwell_rate = 10;
+    pib_config.profile_TSEN = 1;
+    pib_config.profile_ROPC = 1;
+    pib_config.profile_FLASH = 1;
+    pib_config.motion_timeout = 30;
 
     EEPROM.put(EEPROM_BASE_ADDRESS, pib_config);
 }

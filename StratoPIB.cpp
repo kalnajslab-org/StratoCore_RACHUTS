@@ -118,23 +118,23 @@ bool StratoPIB::StartMCBMotion()
     case MOTION_REEL_IN:
         snprintf(log_array, LOG_ARRAY_SIZE, "Retracting %0.1f revs", retract_length);
         success = mcbComm.TX_Reel_In(retract_length, pib_config.retract_velocity);
-        max_profile_seconds = 60 * (retract_length / pib_config.retract_velocity) + 30;
+        max_profile_seconds = 60 * (retract_length / pib_config.retract_velocity) + pib_config.motion_timeout;
         break;
     case MOTION_REEL_OUT:
         PUUndock();
         snprintf(log_array, LOG_ARRAY_SIZE, "Deploying %0.1f revs", deploy_length);
         success = mcbComm.TX_Reel_Out(deploy_length, pib_config.deploy_velocity);
-        max_profile_seconds = 60 * (deploy_length / pib_config.deploy_velocity) + 30;
+        max_profile_seconds = 60 * (deploy_length / pib_config.deploy_velocity) + pib_config.motion_timeout;
         break;
     case MOTION_DOCK:
         snprintf(log_array, LOG_ARRAY_SIZE, "Docking %0.1f revs", dock_length);
         success = mcbComm.TX_Dock(dock_length, pib_config.dock_velocity);
-        max_profile_seconds = 60 * (dock_length / pib_config.dock_velocity) + 30;
+        max_profile_seconds = 60 * (dock_length / pib_config.dock_velocity) + pib_config.motion_timeout;
         break;
     case MOTION_IN_NO_LW:
         snprintf(log_array, LOG_ARRAY_SIZE, "Reel in (no LW) %0.1f revs", retract_length);
         success = mcbComm.TX_In_No_LW(retract_length, pib_config.dock_velocity);
-        max_profile_seconds = 60 * (retract_length / pib_config.dock_velocity) + 30;
+        max_profile_seconds = 60 * (retract_length / pib_config.dock_velocity) + pib_config.motion_timeout;
         break;
     default:
         mcb_motion = NO_MOTION;
@@ -312,8 +312,10 @@ void StratoPIB::PUUndock()
 
 void StratoPIB::PUStartProfile()
 {
-    int32_t t_down = 60 * (deploy_length / pib_config.deploy_velocity) + PREPROFILE_PERIOD;
-    int32_t t_up = 60 * (retract_length / pib_config.retract_velocity + dock_length / pib_config.dock_velocity);
+    int32_t t_down = 60 * (deploy_length / pib_config.deploy_velocity) + pib_config.preprofile_time;
+    int32_t t_up = 60 * (retract_length / pib_config.retract_velocity + dock_length / pib_config.dock_velocity)
+                   + pib_config.motion_timeout; // extra time for dock delay
 
-    puComm.TX_Profile(t_down, pib_config.dwell_time, t_up, 1, 10, 1, 1, 1);
+    puComm.TX_Profile(t_down, pib_config.dwell_time, t_up, pib_config.profile_rate, pib_config.dwell_rate,
+                      pib_config.profile_TSEN, pib_config.profile_ROPC, pib_config.profile_FLASH);
 }

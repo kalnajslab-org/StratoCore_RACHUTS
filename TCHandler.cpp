@@ -31,7 +31,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set deploy_velocity: %f", pib_config.deploy_velocity);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting deploy_velocity: %f", pib_config.deploy_velocity);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting deploy_velocity: %f", pib_config.deploy_velocity);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -52,7 +52,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set retract_velocity: %f", pib_config.retract_velocity);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting retract_velocity: %f", pib_config.retract_velocity);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting retract_velocity: %f", pib_config.retract_velocity);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -73,7 +73,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set dock_velocity: %f", pib_config.dock_velocity);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting dock_velocity: %f", pib_config.dock_velocity);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting dock_velocity: %f", pib_config.dock_velocity);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -120,7 +120,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set sza_minimum: %f", pib_config.sza_minimum);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting sza_minimum: %f", pib_config.sza_minimum);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting sza_minimum: %f", pib_config.sza_minimum);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -129,7 +129,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set profile_size: %f", pib_config.profile_size);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting profile_size: %f", pib_config.profile_size);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting profile_size: %f", pib_config.profile_size);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -138,7 +138,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set dock_amount: %f", pib_config.dock_amount);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting dock_amount: %f", pib_config.dock_amount);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting dock_amount: %f", pib_config.dock_amount);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -147,7 +147,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set dwell_time: %u", pib_config.dwell_time);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting dwell_time: %u", pib_config.dwell_time);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting dwell_time: %u", pib_config.dwell_time);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -156,7 +156,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set profile_period: %u", pib_config.profile_period);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting profile_period: %u", pib_config.profile_period);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting profile_period: %u", pib_config.profile_period);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -165,7 +165,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set num_profiles: %u", pib_config.num_profiles);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting num_profiles: %u", pib_config.num_profiles);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting num_profiles: %u", pib_config.num_profiles);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -180,7 +180,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             log_nominal(log_array);
             profiles_remaining = pib_config.num_profiles;
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting time_trigger: %lu", pib_config.time_trigger);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting time_trigger: %lu", pib_config.time_trigger);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -189,7 +189,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set sza_trigger: %u", pib_config.sza_trigger);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting sza_trigger: %u", pib_config.sza_trigger);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting sza_trigger: %u", pib_config.sza_trigger);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -198,7 +198,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set sza_trigger: %u", pib_config.sza_trigger);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting sza_trigger: %u", pib_config.sza_trigger);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting sza_trigger: %u", pib_config.sza_trigger);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -207,7 +207,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             snprintf(log_array, LOG_ARRAY_SIZE, "Set dock_overshoot: %f", pib_config.dock_overshoot);
             log_nominal(log_array);
         } else {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Error setting dock_overshoot: %f", pib_config.dock_overshoot);
+            snprintf(log_array, LOG_ARRAY_SIZE, "EEPROM Error setting dock_overshoot: %f", pib_config.dock_overshoot);
             ZephyrLogWarn(log_array);
         }
         break;
@@ -256,7 +256,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         tc_success &= EEPROM_UPDATE_UINT16(pibStorage, dwell_time, pibParam.dwellTime);
 
         if (!tc_success) {
-            ZephyrLogCrit("Error setting manual profile parameters");
+            ZephyrLogCrit("EEPROM Error setting manual profile parameters");
             break;
         }
 
@@ -274,6 +274,75 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
 
         SetAction(ACTION_OFFLOAD_PU);
         break;
+    case SETPREPROFILETIME:
+        log_nominal("Received new pre-profile time");
+
+        if (!EEPROM_UPDATE_UINT16(pibStorage, preprofile_time, pibParam.preprofileTime)) {
+            ZephyrLogCrit("EEPROM Error setting new pre-profile time");
+        }
+
+        break;
+    case SETPUWARMUPTIME:
+        log_nominal("Received new pu warmup time");
+
+        if (!EEPROM_UPDATE_UINT16(pibStorage, preprofile_time, pibParam.preprofileTime)) {
+            ZephyrLogCrit("EEPROM Error setting new pre-profile time");
+        }
+
+        break;
+    case AUTOREDOCKPARAMS:
+        log_nominal("Received new auto redock parameters");
+
+        tc_success = true;
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, redock_out, pibParam.autoRedockIn);
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, redock_in, pibParam.autoRedockOut);
+        tc_success &= EEPROM_UPDATE_UINT8(pibStorage, num_redock, pibParam.numRedock);
+
+        if (!tc_success) {
+            ZephyrLogCrit("EEPROM Error setting autonomous redock parameters");
+        }
+
+        break;
+    case SETMOTIONTIMEOUT:
+        log_nominal("Received new motion timeout");
+
+        if (!EEPROM_UPDATE_UINT8(pibStorage, motion_timeout, pibParam.motionTimeout)) {
+            ZephyrLogCrit("EEPROM Error setting new motion timeout");
+        }
+
+        break;
+    case PUWARMUPCONFIGS:
+        log_nominal("Received new PU warmup configs");
+
+        tc_success = true;
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, flash_temp, puParam.flashT);
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, heater1_temp, puParam.heater1T);
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, heater2_temp, puParam.heater2T);
+        tc_success &= EEPROM_UPDATE_UINT8(pibStorage, flash_power, puParam.flashPower);
+        tc_success &= EEPROM_UPDATE_UINT8(pibStorage, tsen_power, puParam.tsenPower);
+
+        if (!tc_success) {
+            ZephyrLogCrit("EEPROM Error setting PU warmup configs");
+        }
+
+        break;
+
+    case PUPROFILECONFIGS:
+        log_nominal("Received new PU profile configs");
+
+        tc_success = true;
+        tc_success &= EEPROM_UPDATE_UINT32(pibStorage, profile_rate, puParam.profileRate);
+        tc_success &= EEPROM_UPDATE_UINT32(pibStorage, dwell_rate, puParam.dwellRate);
+        tc_success &= EEPROM_UPDATE_UINT8(pibStorage, profile_TSEN, puParam.profileTSEN);
+        tc_success &= EEPROM_UPDATE_UINT8(pibStorage, profile_ROPC, puParam.profileROPC);
+        tc_success &= EEPROM_UPDATE_UINT8(pibStorage, profile_FLASH, puParam.profileFLASH);
+
+        if (!tc_success) {
+            ZephyrLogCrit("EEPROM Error setting PU profile configs");
+        }
+
+        break;
+
     case EXITERROR:
         SetAction(EXIT_ERROR_STATE);
         break;

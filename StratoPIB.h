@@ -34,9 +34,6 @@
 #define MCB_BUFFER_SIZE     50
 #define PU_BUFFER_SIZE      8192
 
-#define WARMUP_PERIOD       60//0 // 15 min nominal (TODO: fix from test values)
-#define PREPROFILE_PERIOD   30//0 // 3 min nominal (TODO: fix from test values)
-
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
     NO_ACTION = NO_SCHEDULED_ACTION,
