@@ -26,7 +26,10 @@ void StratoPIB::EndOfFlightMode()
         // perform setup
         log_nominal("Entering EF");
 
-        // need to figure out what to do here, should already be safe, but need to verify
+        // do anything else?
+        mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
+        delay(100);
+        mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
 
         inst_substate = EF_LOOP;
         break;

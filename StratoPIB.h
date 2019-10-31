@@ -50,6 +50,7 @@ enum ScheduleAction_t : uint8_t {
     RESEND_PU_RECORD,
     RESEND_PU_WARMUP,
     RESEND_PU_GOPROFILE,
+    RESEND_FULL_RETRACT,
 
     // exit the error state (ground command only)
     EXIT_ERROR_STATE,
@@ -208,6 +209,7 @@ private:
     bool mcb_motion_ongoing = false;
     bool mcb_dock_ongoing = false;
     uint32_t max_profile_seconds = 0;
+    bool mcb_reeling_in = false;
 
     // flags for PU state tracking
     bool record_received = false;

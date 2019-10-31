@@ -99,6 +99,9 @@ void StratoPIB::HandleMCBAck()
     case MCB_IN_NO_LW:
         if (MOTION_IN_NO_LW == mcb_motion) NoteProfileStart();
         break;
+    case MCB_FULL_RETRACT:
+        mcb_reeling_in = true;
+        break;
     case MCB_IN_ACC:
     case MCB_OUT_ACC:
     case MCB_DOCK_ACC:
