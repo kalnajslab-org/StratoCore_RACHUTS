@@ -100,7 +100,7 @@ bool PIBStorage::Update_uint16(uint16_t offset, uint16_t data)
     if (offset + sizeof(data) > sizeof(PIBConfigs_t)) return false;
 
     // no need to update if the value is already correct
-    if (data == *(((uint16_t *) &pib_config) + offset)) return true;
+    if (data == *((uint16_t *) (((uint8_t *) &pib_config) + offset))) return true;
 
     // update the software struct
     *((uint16_t *) (((uint8_t *) &pib_config) + offset)) = data;
@@ -117,7 +117,7 @@ bool PIBStorage::Update_uint32(uint16_t offset, uint32_t data)
     if (offset + sizeof(data) > sizeof(PIBConfigs_t)) return false;
 
     // no need to update if the value is already correct
-    if (data == *(((uint32_t *) &pib_config) + offset)) return true;
+    if (data == *((uint32_t *) (((uint8_t *) &pib_config) + offset))) return true;
 
     // update the software struct
     *((uint32_t *) (((uint8_t *) &pib_config) + offset)) = data;
@@ -134,7 +134,7 @@ bool PIBStorage::Update_float(uint16_t offset, float data)
     if (offset + sizeof(data) > sizeof(PIBConfigs_t)) return false;
 
     // no need to update if the value is already correct
-    if (data == *(((float *) &pib_config) + offset)) return true;
+    if (data == *((float *) (((uint8_t *) &pib_config) + offset))) return true;
 
     // update the software struct
     *((float *) (((uint8_t *) &pib_config) + offset)) = data;

@@ -188,8 +188,8 @@ bool StratoPIB::Flight_Profile(bool restart_state)
             scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
             profile_state = ST_CONFIRM_MCB_LP;
         } else {
-            if (pib_config.num_redock == ++redock_count) {
-                ZephyrLogCrit("Two redock failures");
+            if ((pib_config.num_redock + 1) == ++redock_count) {
+                ZephyrLogCrit("No dock! Exceeded allowable number of redock attempts");
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             } else {
                 deploy_length = pib_config.redock_out;

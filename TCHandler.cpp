@@ -285,7 +285,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     case SETPUWARMUPTIME:
         log_nominal("Received new pu warmup time");
 
-        if (!EEPROM_UPDATE_UINT16(pibStorage, preprofile_time, pibParam.preprofileTime)) {
+        if (!EEPROM_UPDATE_UINT16(pibStorage, puwarmup_time, pibParam.warmupTime)) {
             ZephyrLogCrit("EEPROM Error setting new pre-profile time");
         }
 
@@ -294,8 +294,8 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         log_nominal("Received new auto redock parameters");
 
         tc_success = true;
-        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, redock_out, pibParam.autoRedockIn);
-        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, redock_in, pibParam.autoRedockOut);
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, redock_out, pibParam.autoRedockOut);
+        tc_success &= EEPROM_UPDATE_FLOAT(pibStorage, redock_in, pibParam.autoRedockIn);
         tc_success &= EEPROM_UPDATE_UINT8(pibStorage, num_redock, pibParam.numRedock);
 
         if (!tc_success) {
