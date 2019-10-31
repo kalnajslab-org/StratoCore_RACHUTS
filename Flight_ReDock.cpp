@@ -64,7 +64,6 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
     case ST_VERIFY_MOTION:
         if (mcb_motion_ongoing) { // set in the Ack handler
             log_nominal("MCB commanded motion");
-            scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
             redock_state = ST_MONITOR_MOTION;
         }
 
@@ -85,13 +84,6 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
             // todo: verification of motion stop
             ZephyrLogFine("Commanded motion stop");
             return true;
-            break;
-        }
-
-        if (CheckAction(ACTION_MOTION_TIMEOUT)) {
-            ZephyrLogCrit("MCB Motion took longer than expected");
-            mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
-            inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;
         }
 

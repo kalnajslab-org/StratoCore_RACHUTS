@@ -254,9 +254,9 @@ void StratoPIB::SendTSENTM()
     log_nominal(log_array);
 }
 
-void StratoPIB::SendProfileTM()
+void StratoPIB::SendProfileTM(uint8_t packet_num)
 {
-    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU Profile Record: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU Profile Record %u: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", packet_num, pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {
         zephyrTX.setStateDetails(1, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {

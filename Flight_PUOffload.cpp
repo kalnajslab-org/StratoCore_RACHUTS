@@ -16,6 +16,7 @@ enum PUOffloadStates_t {
 
 static PUOffloadStates_t puoffload_state = ST_ENTRY;
 static bool resend_attempted = false;
+static uint8_t packet_num = 0;
 
 bool StratoPIB::Flight_PUOffload(bool restart_state)
 {
@@ -30,6 +31,7 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
 
     case ST_GET_PU_STATUS:
         if (Flight_CheckPU(false)) {
+            packet_num = 0;
             puoffload_state = ST_REQUEST_PACKET;
         }
         break;
@@ -45,9 +47,10 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
     case ST_WAIT_PACKET:
         if (record_received) { // ACK/NAK in PURouter
             record_received = false;
+            packet_num++;
             snprintf(log_array, LOG_ARRAY_SIZE, "Received profile record: %u", puComm.binary_rx.bin_length);
             log_nominal(log_array);
-            SendProfileTM();
+            SendProfileTM(packet_num);
             puoffload_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
             break;

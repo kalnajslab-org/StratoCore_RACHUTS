@@ -15,6 +15,9 @@ enum SAStates_t : uint8_t {
     SA_SEND_FULL_RETRACT,
     SA_VERIFY_FULL_RETRACT,
     SA_MONITOR_FULL_RETRACT,
+    SA_COMMAND_DOCK,
+    SA_VERIFY_DOCK,
+    SA_MONITOR_DOCK,
     SA_SEND_MCB_LP,
     SA_VERIFY_MCB_LP,
     SA_LOOP,
@@ -34,6 +37,7 @@ void StratoPIB::SafetyMode()
         log_nominal("Entering SA");
         inst_substate = SA_SEND_FULL_RETRACT;
         break;
+
     case SA_SEND_FULL_RETRACT:
         mcb_reeling_in = false;
         mcb_motion_ongoing = true;
@@ -41,6 +45,7 @@ void StratoPIB::SafetyMode()
         scheduler.AddAction(RESEND_FULL_RETRACT, MCB_RESEND_TIMEOUT);
         inst_substate = SA_VERIFY_FULL_RETRACT;
         break;
+
     case SA_VERIFY_FULL_RETRACT:
         if (mcb_reeling_in) {
             log_nominal("MCB performing full retract");
@@ -51,18 +56,52 @@ void StratoPIB::SafetyMode()
             inst_substate = SA_SEND_FULL_RETRACT;
         }
         break;
+
     case SA_MONITOR_FULL_RETRACT:
         if (!mcb_motion_ongoing) {
             log_nominal("MCB full retract appears complete");
+            dock_length = 200; // go for it -- if we're further than 200 away, something bigger is wrong
+            inst_substate = SA_COMMAND_DOCK;
+        }
+        break;
+
+    case SA_COMMAND_DOCK:
+        mcb_motion = MOTION_DOCK;
+
+        if (StartMCBMotion()) {
+            inst_substate = SA_VERIFY_DOCK;
+            scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
+        } else {
+            ZephyrLogWarn("Motion start error");
+            inst_substate = MODE_ERROR;
+        }
+        break;
+
+    case SA_VERIFY_DOCK:
+        if (mcb_motion_ongoing) { // set in the Ack handler
+            log_nominal("MCB commanded motion");
+            scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
+            inst_substate = SA_MONITOR_DOCK;
+        }
+
+        if (CheckAction(RESEND_MOTION_COMMAND)) {
+            inst_substate = SA_COMMAND_DOCK;
+        }
+        break;
+
+    case SA_MONITOR_DOCK:
+        if (!mcb_motion_ongoing) {
             inst_substate = SA_SEND_MCB_LP;
         }
         break;
+
     case SA_SEND_MCB_LP:
         mcb_low_power = false;
         mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
         scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
         inst_substate = SA_VERIFY_MCB_LP;
         break;
+
     case SA_VERIFY_MCB_LP:
         if (mcb_low_power) {
             log_nominal("MCB in low power for safety");
@@ -74,6 +113,7 @@ void StratoPIB::SafetyMode()
             inst_substate = SA_SEND_S; // actually just skip to sending safety
         }
         break;
+
     case SA_SEND_S:
         log_nominal("Sending safety message");
         digitalWrite(SAFE_PIN, HIGH);
@@ -81,6 +121,7 @@ void StratoPIB::SafetyMode()
         scheduler.AddAction(RESEND_SAFETY, ZEPHYR_RESEND_TIMEOUT);
         inst_substate = SA_ACK_WAIT;
         break;
+
     case SA_ACK_WAIT:
         log_debug("Waiting on safety ack");
         // check if the ack has been received
@@ -99,23 +140,28 @@ void StratoPIB::SafetyMode()
         }
 
         break;
+
     case SA_LOOP:
         // nominal ops
         log_debug("SA loop");
         digitalWrite(SAFE_PIN, HIGH);
         break;
+
     case SA_ERROR_LANDING:
         log_debug("SA error");
         break;
+
     case SA_SHUTDOWN:
         // prep for shutdown
         log_nominal("Shutdown warning received in SA");
         break;
+
     case SA_EXIT:
         // perform cleanup
         digitalWrite(SAFE_PIN, LOW);
         log_nominal("Exiting SA");
         break;
+
     default:
         // todo: throw error
         log_error("Unknown substate in SA");

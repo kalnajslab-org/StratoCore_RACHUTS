@@ -187,7 +187,7 @@ private:
 
     // send a telemetry packet with PU TSEN or Profile Record info
     void SendTSENTM();
-    void SendProfileTM();
+    void SendProfileTM(uint8_t packet_num);
 
     // schedule TSEN packets every 15 minutes synchronized with the hour
     bool ScheduleNextTSEN();
