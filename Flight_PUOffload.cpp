@@ -9,6 +9,7 @@
 enum PUOffloadStates_t {
     ST_ENTRY,
     ST_GET_PU_STATUS,
+    ST_WAIT_PU_STATUS,
     ST_REQUEST_PACKET,
     ST_WAIT_PACKET,
     ST_TM_ACK,
@@ -25,13 +26,17 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
     switch (puoffload_state) {
     case ST_ENTRY:
         resend_attempted = false;
-        Flight_CheckPU(true);
+        packet_num = 0;
         puoffload_state = ST_GET_PU_STATUS;
         break;
 
     case ST_GET_PU_STATUS:
+        Flight_CheckPU(true);
+        puoffload_state = ST_WAIT_PU_STATUS;
+        break;
+
+    case ST_WAIT_PU_STATUS:
         if (Flight_CheckPU(false)) {
-            packet_num = 0;
             puoffload_state = ST_REQUEST_PACKET;
         }
         break;
@@ -74,12 +79,14 @@ bool StratoPIB::Flight_PUOffload(bool restart_state)
 
     case ST_TM_ACK:
         if (ACK == TM_ack_flag) {
-            puoffload_state = ST_ENTRY;
+            resend_attempted = false;
+            puoffload_state = ST_GET_PU_STATUS;
         } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
             // attempt one resend
             log_error("Needed to resend TM");
             zephyrTX.TM(); // message is still saved in XMLWriter, no need to reconstruct
-            puoffload_state = ST_ENTRY;
+            resend_attempted = false;
+            puoffload_state = ST_GET_PU_STATUS;
         }
         break;
 
