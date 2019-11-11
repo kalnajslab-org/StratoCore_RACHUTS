@@ -69,6 +69,9 @@ void StratoPIB::HandlePUAck()
         log_nominal("PU in profile");
         pu_profile = true;
         break;
+    case PU_RESET:
+        ZephyrLogFine("PU acked reset");
+        break;
     default:
         log_error("Unknown PU ack received");
         break;

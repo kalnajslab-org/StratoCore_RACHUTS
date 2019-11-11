@@ -103,10 +103,25 @@ void StratoPIB::HandleMCBAck()
         mcb_reeling_in = true;
         break;
     case MCB_IN_ACC:
+        ZephyrLogFine("MCB acked retract acc");
+        break;
     case MCB_OUT_ACC:
+        ZephyrLogFine("MCB acked deploy acc");
+        break;
     case MCB_DOCK_ACC:
+        ZephyrLogFine("MCB acked dock acc");
+        break;
     case MCB_ZERO_REEL:
-        // currently not handled, though received
+        ZephyrLogFine("MCB acked zero reel");
+        break;
+    case MCB_TEMP_LIMITS:
+        ZephyrLogFine("MCB acked temp limits");
+        break;
+    case MCB_TORQUE_LIMITS:
+        ZephyrLogFine("MCB acked torque limits");
+        break;
+    case MCB_CURR_LIMITS:
+        ZephyrLogFine("MCB acked curr limits");
         break;
     default:
         log_error("Unknown MCB ack received");
