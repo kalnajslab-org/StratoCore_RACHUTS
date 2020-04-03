@@ -20,6 +20,8 @@ void StratoPIB::RunMCBRouter()
             HandleMCBAck();
         } else if (BIN_MESSAGE == rx_msg) {
             HandleMCBBin();
+        } else if (STRING_MESSAGE == rx_msg) {
+            HandleMCBString();
         } else {
             log_error("Unknown message type from MCB");
         }
@@ -34,12 +36,6 @@ void StratoPIB::HandleMCBASCII()
     case MCB_MOTION_FINISHED:
         log_nominal("MCB motion finished"); // state machine will report to Zephyr
         mcb_motion_ongoing = false;
-        break;
-    case MCB_ERROR:
-        if (mcbComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
-            ZephyrLogCrit(log_array);
-            inst_substate = MODE_ERROR;
-        }
         break;
     case MCB_MOTION_FAULT:
         // if flag already cleared, assume this is the repeat
@@ -146,5 +142,20 @@ void StratoPIB::HandleMCBBin()
         break;
     default:
         log_error("Unknown MCB bin received");
+    }
+}
+
+void StratoPIB::HandleMCBString()
+{
+    switch (mcbComm.string_rx.str_id) {
+    case MCB_ERROR:
+        if (mcbComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
+        break;
+    default:
+        log_error("Unknown MCB String message received");
+        break;
     }
 }

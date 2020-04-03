@@ -162,12 +162,14 @@ private:
     void HandleMCBASCII();
     void HandleMCBAck();
     void HandleMCBBin();
+    void HandleMCBString();
     uint8_t binary_mcb[MCB_BUFFER_SIZE];
 
     // Handle messages from the PU (in PURouter.cpp)
     void HandlePUASCII();
     void HandlePUAck();
     void HandlePUBin();
+    void HandlePUString();
     uint8_t binary_pu[PU_BUFFER_SIZE];
 
     // Start any type of MCB motion

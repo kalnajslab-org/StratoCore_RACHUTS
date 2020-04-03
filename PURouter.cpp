@@ -20,6 +20,8 @@ void StratoPIB::RunPURouter()
             HandlePUAck();
         } else if (BIN_MESSAGE == rx_msg) {
             HandlePUBin();
+        } else if (STRING_MESSAGE == rx_msg) {
+            HandlePUString();
         } else {
             log_error("Unknown message type from PU");
         }
@@ -45,12 +47,6 @@ void StratoPIB::HandlePUASCII()
         break;
     case PU_NO_MORE_RECORDS:
         pu_no_more_records = true;
-        break;
-    case PU_ERROR:
-        if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
-            ZephyrLogCrit(log_array);
-            inst_substate = MODE_ERROR;
-        }
         break;
     default:
         log_error("Unknown PU ASCII message received");
@@ -114,6 +110,21 @@ void StratoPIB::HandlePUBin()
 
     default:
         log_error("Unknown PU bin received");
+        break;
+    }
+}
+
+void StratoPIB::HandlePUString()
+{
+    switch (puComm.string_rx.str_id) {
+    case PU_ERROR:
+        if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
+        break;
+    default:
+        log_error("Unknown PU String message received");
         break;
     }
 }
