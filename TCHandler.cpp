@@ -116,6 +116,12 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             ZephyrLogWarn("Error sending curr limits to MCB");
         }
         break;
+    case IGNORELIMITS:
+        mcbComm.TX_ASCII(MCB_IGNORE_LIMITS);
+        break;
+    case USELIMITS:
+        mcbComm.TX_ASCII(MCB_USE_LIMITS);
+        break;
     case SETAUTO:
         if (!mcb_motion_ongoing) {
             autonomous_mode = true;

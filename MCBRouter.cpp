@@ -119,6 +119,12 @@ void StratoPIB::HandleMCBAck()
     case MCB_CURR_LIMITS:
         ZephyrLogFine("MCB acked curr limits");
         break;
+    case MCB_IGNORE_LIMITS:
+        ZephyrLogFine("MCB acked ignore limits");
+        break;
+    case MCB_USE_LIMITS:
+        ZephyrLogFine("MCB acked use limits");
+        break;
     default:
         log_error("Unknown MCB ack received");
         break;
