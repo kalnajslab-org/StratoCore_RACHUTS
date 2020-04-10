@@ -99,7 +99,7 @@ bool StratoPIB::Flight_ReDock(bool restart_state)
         break;
 
     case ST_WAIT_PU:
-        if (pib_config.pu_docked) {
+        if (pibConfigs.pu_docked.Read()) {
             snprintf(log_array, LOG_ARRAY_SIZE, "PU status: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat);
             ZephyrLogFine(log_array);
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
