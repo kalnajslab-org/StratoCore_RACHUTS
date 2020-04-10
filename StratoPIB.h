@@ -14,7 +14,7 @@
 #include "StratoCore.h"
 #include "PIBHardware.h"
 #include "PIBBufferGuard.h"
-#include "PIBStorage.h"
+#include "PIBConfigs.h"
 #include "MCBComm.h"
 #include "PUComm.h"
 
@@ -120,7 +120,7 @@ private:
     PUComm puComm;
 
     // EEPROM interface object
-    PIBStorage pibStorage;
+    PIBConfigs pibConfigs;
 
     // Mode functions (implemented in unique source files)
     void StandbyMode();

@@ -215,9 +215,9 @@ void StratoPIB::AutonomousFlight()
     switch (inst_substate) {
     case FLA_IDLE:
         if (zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
-            profiles_remaining = pib_config.num_profiles;
+            profiles_remaining = pibConfigs.num_profiles.Read();
             profiles_scheduled = false;
-        } else if (0 != profiles_remaining && pib_config.sza_trigger && zephyrRX.zephyr_gps.solar_zenith_angle > pib_config.sza_minimum) {
+        } else if (0 != profiles_remaining && pibConfigs.sza_trigger.Read() && zephyrRX.zephyr_gps.solar_zenith_angle > pibConfigs.sza_minimum.Read()) {
             if (profiles_scheduled) {
                 inst_substate = FLA_WAIT_PROFILE;
             } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
@@ -226,7 +226,7 @@ void StratoPIB::AutonomousFlight()
             } else {
                 inst_substate = FL_ERROR_LANDING;
             }
-        } else if (0 != profiles_remaining && !pib_config.sza_trigger && (uint32_t) now() >= pib_config.time_trigger) {
+        } else if (0 != profiles_remaining && !pibConfigs.sza_trigger.Read() && (uint32_t) now() >= pibConfigs.time_trigger.Read()) {
             if (profiles_scheduled) {
                 inst_substate = FLA_WAIT_PROFILE;
             } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
