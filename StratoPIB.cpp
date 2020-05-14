@@ -11,7 +11,7 @@
 #include "StratoPIB.h"
 
 StratoPIB::StratoPIB()
-    : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
+    : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT, &DEBUG_SERIAL)
     , mcbComm(&MCB_SERIAL)
     , puComm(&PU_SERIAL)
 {

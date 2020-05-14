@@ -7,6 +7,7 @@
  */
 
 #include "PIBConfigs.h"
+#include "StratoGroundPort.h"
 
 PIBConfigs::PIBConfigs()
     : TeensyEEPROM(CONFIG_VERSION, BASE_ADDRESS)
@@ -78,6 +79,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&pu_docked);
 
     if (!success) {
-        Serial.println("Error registering EEPROM configs");
+        debug_serial->println("Error registering EEPROM configs");
     }
 }

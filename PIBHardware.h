@@ -2,7 +2,7 @@
  *  PIBHardware.h
  *  Author:  Alex St. Clair
  *  Created: July 2019
- *  
+ *
  *  Pin and port definitions for the PIB
  */
 
@@ -10,9 +10,10 @@
 #define PIBHARDWARE_H
 
 // Serial Ports
-#define ZEPHYR_SERIAL   Serial1
+#define DEBUG_SERIAL    Serial1
+#define ZEPHYR_SERIAL   Serial
 #define MCB_SERIAL      Serial2
-#define PU_SERIAL       Serial3 // need to verify
+#define PU_SERIAL       Serial3
 
 // Digital Pins
 #define PU_PWR_ENABLE   26
