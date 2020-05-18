@@ -317,6 +317,9 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         SetAction(EXIT_ERROR_STATE);
         ZephyrLogFine("Received exit error command");
         break;
+    case GETTMBUFFER:
+        SendTMBuffer(); // StratoCore functionality
+        break;
     default:
         log_error("Unknown TC received");
         // error case here
