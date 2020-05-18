@@ -146,6 +146,9 @@ void StratoPIB::HandleMCBBin()
         }
         AddMCBTM();
         break;
+    case MCB_EEPROM:
+        SendMCBEEPROM();
+        break;
     default:
         log_error("Unknown MCB bin received");
     }

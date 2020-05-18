@@ -17,6 +17,8 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     log_debug("Received telecommand");
 
     switch (telecommand) {
+
+    // MCB Telecommands -----------------------------------
     case DEPLOYx:
         if (autonomous_mode) {
             ZephyrLogWarn("Switch to manual mode before commanding motion");
@@ -110,6 +112,15 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     case USELIMITS:
         mcbComm.TX_ASCII(MCB_USE_LIMITS);
         break;
+    case GETMCBEEPROM:
+        if (mcb_motion_ongoing) {
+            ZephyrLogWarn("Motion ongoing, request MCB EEPROM later");
+        } else {
+            mcbComm.TX_ASCII(MCB_GET_EEPROM);
+        }
+        break;
+
+    // PIB Telecommands -----------------------------------
     case SETAUTO:
         if (!mcb_motion_ongoing) {
             autonomous_mode = true;
@@ -268,6 +279,15 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         snprintf(log_array, LOG_ARRAY_SIZE, "Set motion_timeout: %u", pibConfigs.motion_timeout.Read());
         ZephyrLogFine(log_array);
         break;
+    case GETPIBEEPROM:
+        if (mcb_motion_ongoing) {
+            ZephyrLogWarn("Motion ongoing, request PIB EEPROM later");
+        } else {
+            SendPIBEEPROM();
+        }
+        break;
+
+    // PU Telecommands ------------------------------------
     case PUWARMUPCONFIGS:
         pibConfigs.flash_temp.Write(puParam.flashT);
         pibConfigs.heater1_temp.Write(puParam.heater1T);
@@ -278,7 +298,6 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
                  pibConfigs.heater1_temp.Read(), pibConfigs.heater2_temp.Read(), pibConfigs.flash_power.Read(), pibConfigs.tsen_power.Read());
         ZephyrLogFine(log_array);
         break;
-
     case PUPROFILECONFIGS:
         pibConfigs.profile_rate.Write(puParam.profileRate);
         pibConfigs.dwell_rate.Write(puParam.dwellRate);
@@ -289,11 +308,11 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
                  pibConfigs.dwell_rate.Read(), pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read());
         ZephyrLogFine(log_array);
         break;
-
     case PURESET:
         puComm.TX_ASCII(PU_RESET);
         break;
 
+    // General Telecommands -------------------------------
     case EXITERROR:
         SetAction(EXIT_ERROR_STATE);
         ZephyrLogFine("Received exit error command");

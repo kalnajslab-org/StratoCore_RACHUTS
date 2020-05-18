@@ -232,6 +232,53 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
     }
 }
 
+
+void StratoPIB::SendMCBEEPROM()
+{
+    // the binary buffer has been prepared by the MCBRouter
+    zephyrTX.clearTm();
+    zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
+
+    // use only the first flag to preface the contents
+    zephyrTX.setStateDetails(1, "MCB EEPROM Contents");
+    zephyrTX.setStateFlagValue(1, FINE);
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    // send as TM
+    TM_ack_flag = NO_ACK;
+    zephyrTX.TM();
+
+    log_nominal("Sent MCB EEPROM as TM");
+}
+
+void StratoPIB::SendPIBEEPROM()
+{
+    // create a buffer from the EEPROM (cheat, and use the preallocated MCBComm Binary RX buffer)
+    mcbComm.binary_rx.bin_length = pibConfigs.Bufferize(mcbComm.binary_rx.bin_buffer, MAX_MCB_BINARY);
+
+    if (0 == mcbComm.binary_rx.bin_length) {
+        log_error("Unable to bufferize PIB EEPROM");
+        return;
+    }
+
+    // prepare the TM buffer
+    zephyrTX.clearTm();
+    zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
+
+    // use only the first flag to preface the contents
+    zephyrTX.setStateDetails(1, "PIB EEPROM Contents");
+    zephyrTX.setStateFlagValue(1, FINE);
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    // send as TM
+    TM_ack_flag = NO_ACK;
+    zephyrTX.TM();
+
+    log_nominal("Sent PIB EEPROM as TM");
+}
+
 void StratoPIB::SendTSENTM()
 {
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {

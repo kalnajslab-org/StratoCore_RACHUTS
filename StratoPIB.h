@@ -31,7 +31,7 @@
 
 #define RETRY_DOCK_LENGTH   2.0f
 
-#define MCB_BUFFER_SIZE     50
+#define MCB_BUFFER_SIZE     MAX_MCB_BINARY
 #define PU_BUFFER_SIZE      8192
 
 // todo: update naming to be more unique (ie. ACT_ prefix)
@@ -187,6 +187,10 @@ private:
     // Send a telemetry packet with MCB binary info
     void SendMCBTM(StateFlag_t state_flag, const char * message);
 
+    // Send a telemetry packet with EEPROM contents
+    void SendMCBEEPROM();
+    void SendPIBEEPROM();
+
     // send a telemetry packet with PU TSEN or Profile Record info
     void SendTSENTM();
     void SendProfileTM(uint8_t packet_num);
@@ -243,6 +247,8 @@ private:
 
     // keep a statically allocated array for creating up to 100 char TM state messages
     char log_array[LOG_ARRAY_SIZE] = {0};
+
+    uint8_t eeprom_buffer[256];
 };
 
 #endif /* STRATOPIB_H */
