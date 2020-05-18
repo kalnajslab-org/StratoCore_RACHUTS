@@ -280,7 +280,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
                 profile_state = ST_DOCK_WAIT;
                 break;
             case MOTION_DOCK:
-                SendMCBTM(FINE, "Finished profile dock");
+                // MCB TM sent in MCBRouter handler for MCB_MOTION_FAULT
                 redock_count = 0;
                 Flight_CheckPU(true); // start checking the PU
                 profile_state = ST_GET_PU_STATUS;

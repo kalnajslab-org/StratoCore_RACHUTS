@@ -45,7 +45,7 @@ void StratoPIB::HandleMCBASCII()
                                     motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
             // expected if docking
             if (mcb_dock_ongoing) { // todo: ensure the correct motion fault flags for dock
-                snprintf(log_array, LOG_ARRAY_SIZE, "MCB: dock condition detected: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
+                snprintf(log_array, LOG_ARRAY_SIZE, "MCB: dock condition assumed: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
                          motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
                 SendMCBTM(FINE, log_array);
                 mcb_dock_ongoing = false;
