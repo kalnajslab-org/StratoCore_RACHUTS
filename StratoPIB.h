@@ -223,6 +223,7 @@ private:
     bool pu_no_more_records = false;
     bool pu_warmup = false;
     bool pu_profile = false;
+    bool check_pu_success = false;
 
     // tracks the number of profiles remaining in autonomous mode and if they're scheduled
     uint8_t profiles_remaining = 0;

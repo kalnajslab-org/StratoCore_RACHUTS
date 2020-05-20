@@ -160,8 +160,11 @@ void StratoPIB::ManualFlight()
 
     case FLM_CHECK_PU:
         if (Flight_CheckPU(false)) {
-            snprintf(log_array, LOG_ARRAY_SIZE, "PU status: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat);
-            ZephyrLogFine(log_array);
+            // only send status if the PU check succeeded (otherwise an error message will have been sent)
+            if (check_pu_success) {
+                snprintf(log_array, LOG_ARRAY_SIZE, "PU status: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat);
+                ZephyrLogFine(log_array);
+            }
             inst_substate = FLM_IDLE;
         }
         break;

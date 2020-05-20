@@ -24,6 +24,7 @@ bool StratoPIB::Flight_CheckPU(bool restart_state)
     case ST_ENTRY:
         log_nominal("Starting CheckPU Flight State");
         resend_attempted = false;
+        check_pu_success = false;
         last_pu_status = pu_status.last_status;
         checkpu_state = ST_SEND_REQUEST;
         break;
@@ -37,6 +38,7 @@ bool StratoPIB::Flight_CheckPU(bool restart_state)
     case ST_WAIT_REQUEST:
         if (last_pu_status != pu_status.last_status) {
             resend_attempted = false;
+            check_pu_success = true;
             return true;
         }
 
