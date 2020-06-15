@@ -10,7 +10,7 @@
 #define PIBHARDWARE_H
 
 // Serial Ports
-#define DEBUG_SERIAL    Serial1
+#define DEBUG_SERIAL    Serial
 #define ZEPHYR_SERIAL   Serial
 #define MCB_SERIAL      Serial2
 #define PU_SERIAL       Serial3

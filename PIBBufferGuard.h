@@ -36,9 +36,9 @@
 #endif
 
 #ifndef SERIAL2_RX_BUFFER_SIZE
-#error "Need to redefine the Serial2 buffer size to 128"
-#elif SERIAL2_RX_BUFFER_SIZE != 128 // MCB comms should be small
-#error "Serial2 buffer should be 128 bytes"
+#error "Need to redefine the Serial2 buffer size to 512"
+#elif SERIAL2_RX_BUFFER_SIZE != 512 // MCB comms need a little headroom too
+#error "Serial2 buffer should be 512 bytes"
 #endif
 
 #ifndef SERIAL3_RX_BUFFER_SIZE
