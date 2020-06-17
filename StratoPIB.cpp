@@ -11,7 +11,7 @@
 #include "StratoPIB.h"
 
 StratoPIB::StratoPIB()
-    : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT)
+    : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT, &DEBUG_SERIAL)
     , mcbComm(&MCB_SERIAL)
     , puComm(&PU_SERIAL)
 {
@@ -38,8 +38,8 @@ void StratoPIB::InstrumentSetup()
     pinMode(PU_PWR_ENABLE, OUTPUT);
     digitalWrite(PU_PWR_ENABLE, LOW);
 
-    if (!pibStorage.LoadFromEEPROM()) {
-        ZephyrLogWarn("EEPROM updated");
+    if (!pibConfigs.Initialize()) {
+        ZephyrLogWarn("Error loading from EEPROM! Reconfigured");
     }
 
     mcbComm.AssignBinaryRXBuffer(binary_mcb, MCB_BUFFER_SIZE);
@@ -117,24 +117,24 @@ bool StratoPIB::StartMCBMotion()
     switch (mcb_motion) {
     case MOTION_REEL_IN:
         snprintf(log_array, LOG_ARRAY_SIZE, "Retracting %0.1f revs", retract_length);
-        success = mcbComm.TX_Reel_In(retract_length, pib_config.retract_velocity);
-        max_profile_seconds = 60 * (retract_length / pib_config.retract_velocity) + pib_config.motion_timeout;
+        success = mcbComm.TX_Reel_In(retract_length, pibConfigs.retract_velocity.Read());
+        max_profile_seconds = 60 * (retract_length / pibConfigs.retract_velocity.Read()) + pibConfigs.motion_timeout.Read();
         break;
     case MOTION_REEL_OUT:
         PUUndock();
         snprintf(log_array, LOG_ARRAY_SIZE, "Deploying %0.1f revs", deploy_length);
-        success = mcbComm.TX_Reel_Out(deploy_length, pib_config.deploy_velocity);
-        max_profile_seconds = 60 * (deploy_length / pib_config.deploy_velocity) + pib_config.motion_timeout;
+        success = mcbComm.TX_Reel_Out(deploy_length, pibConfigs.deploy_velocity.Read());
+        max_profile_seconds = 60 * (deploy_length / pibConfigs.deploy_velocity.Read()) + pibConfigs.motion_timeout.Read();
         break;
     case MOTION_DOCK:
         snprintf(log_array, LOG_ARRAY_SIZE, "Docking %0.1f revs", dock_length);
-        success = mcbComm.TX_Dock(dock_length, pib_config.dock_velocity);
-        max_profile_seconds = 60 * (dock_length / pib_config.dock_velocity) + pib_config.motion_timeout;
+        success = mcbComm.TX_Dock(dock_length, pibConfigs.dock_velocity.Read());
+        max_profile_seconds = 60 * (dock_length / pibConfigs.dock_velocity.Read()) + pibConfigs.motion_timeout.Read();
         break;
     case MOTION_IN_NO_LW:
         snprintf(log_array, LOG_ARRAY_SIZE, "Reel in (no LW) %0.1f revs", retract_length);
-        success = mcbComm.TX_In_No_LW(retract_length, pib_config.dock_velocity);
-        max_profile_seconds = 60 * (retract_length / pib_config.dock_velocity) + pib_config.motion_timeout;
+        success = mcbComm.TX_In_No_LW(retract_length, pibConfigs.dock_velocity.Read());
+        max_profile_seconds = 60 * (retract_length / pibConfigs.dock_velocity.Read()) + pibConfigs.motion_timeout.Read();
         break;
     default:
         mcb_motion = NO_MOTION;
@@ -154,21 +154,19 @@ bool StratoPIB::StartMCBMotion()
 bool StratoPIB::ScheduleProfiles()
 {
     // no matter the trigger, reset the time_trigger to the max value, new TC needed to set new value
-    if (!EEPROM_UPDATE_UINT32(pibStorage, time_trigger, UINT32_MAX)) {
-        ZephyrLogCrit("Error scheduling profiles, EEPROM failure");
-        return false;
-    }
+    pibConfigs.time_trigger.Write(UINT32_MAX);
 
     // schedule the configured number of profiles starting in five seconds
-    for (int i = 0; i < pib_config.num_profiles; i++) {
-        if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pib_config.profile_period + 5)) {
+    for (int i = 0; i < pibConfigs.num_profiles.Read(); i++) {
+        if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pibConfigs.profile_period.Read() + 5)) {
             ZephyrLogCrit("Error scheduling profiles, scheduler failure");
             return false;
         }
     }
 
-    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled profiles: %u, %0.2f, %0.2f, %0.2f, %u, %u", pib_config.num_profiles, pib_config.profile_size,
-             pib_config.dock_amount, pib_config.dock_overshoot, pib_config.dwell_time, pib_config.profile_period);
+    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled profiles: %u, %0.2f, %0.2f, %0.2f, %u, %u", pibConfigs.num_profiles.Read(),
+             pibConfigs.profile_size.Read(), pibConfigs.dock_amount.Read(), pibConfigs.dock_overshoot.Read(),
+             pibConfigs.dwell_time.Read(), pibConfigs.profile_period.Read());
     ZephyrLogFine(log_array);
     return true;
 }
@@ -232,6 +230,53 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
     if (!WriteFileTM("MCB")) {
         log_error("Unable to write MCB TM to SD file");
     }
+}
+
+
+void StratoPIB::SendMCBEEPROM()
+{
+    // the binary buffer has been prepared by the MCBRouter
+    zephyrTX.clearTm();
+    zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
+
+    // use only the first flag to preface the contents
+    zephyrTX.setStateDetails(1, "MCB EEPROM Contents");
+    zephyrTX.setStateFlagValue(1, FINE);
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    // send as TM
+    TM_ack_flag = NO_ACK;
+    zephyrTX.TM();
+
+    log_nominal("Sent MCB EEPROM as TM");
+}
+
+void StratoPIB::SendPIBEEPROM()
+{
+    // create a buffer from the EEPROM (cheat, and use the preallocated MCBComm Binary RX buffer)
+    mcbComm.binary_rx.bin_length = pibConfigs.Bufferize(mcbComm.binary_rx.bin_buffer, MAX_MCB_BINARY);
+
+    if (0 == mcbComm.binary_rx.bin_length) {
+        log_error("Unable to bufferize PIB EEPROM");
+        return;
+    }
+
+    // prepare the TM buffer
+    zephyrTX.clearTm();
+    zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
+
+    // use only the first flag to preface the contents
+    zephyrTX.setStateDetails(1, "PIB EEPROM Contents");
+    zephyrTX.setStateFlagValue(1, FINE);
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    // send as TM
+    TM_ack_flag = NO_ACK;
+    zephyrTX.TM();
+
+    log_nominal("Sent PIB EEPROM as TM");
 }
 
 void StratoPIB::SendTSENTM()
@@ -300,22 +345,22 @@ bool StratoPIB::ScheduleNextTSEN()
 
 void StratoPIB::PUDock()
 {
-    EEPROM_UPDATE_BOOL(pibStorage, pu_docked, true);
+    pibConfigs.pu_docked.Write(true);
     digitalWrite(PU_PWR_ENABLE, HIGH);
 }
 
 void StratoPIB::PUUndock()
 {
-    EEPROM_UPDATE_BOOL(pibStorage, pu_docked, false);
+    pibConfigs.pu_docked.Write(false);
     digitalWrite(PU_PWR_ENABLE, LOW);
 }
 
 void StratoPIB::PUStartProfile()
 {
-    int32_t t_down = 60 * (deploy_length / pib_config.deploy_velocity) + pib_config.preprofile_time;
-    int32_t t_up = 60 * (retract_length / pib_config.retract_velocity + dock_length / pib_config.dock_velocity)
-                   + pib_config.motion_timeout; // extra time for dock delay
+    int32_t t_down = 60 * (deploy_length / pibConfigs.deploy_velocity.Read()) + pibConfigs.preprofile_time.Read();
+    int32_t t_up = 60 * (retract_length / pibConfigs.retract_velocity.Read() + dock_length / pibConfigs.dock_velocity.Read())
+                   + pibConfigs.motion_timeout.Read(); // extra time for dock delay
 
-    puComm.TX_Profile(t_down, pib_config.dwell_time, t_up, pib_config.profile_rate, pib_config.dwell_rate,
-                      pib_config.profile_TSEN, pib_config.profile_ROPC, pib_config.profile_FLASH);
+    puComm.TX_Profile(t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
+                      pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read());
 }

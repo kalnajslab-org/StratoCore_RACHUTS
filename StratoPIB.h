@@ -14,7 +14,7 @@
 #include "StratoCore.h"
 #include "PIBHardware.h"
 #include "PIBBufferGuard.h"
-#include "PIBStorage.h"
+#include "PIBConfigs.h"
 #include "MCBComm.h"
 #include "PUComm.h"
 
@@ -31,7 +31,7 @@
 
 #define RETRY_DOCK_LENGTH   2.0f
 
-#define MCB_BUFFER_SIZE     50
+#define MCB_BUFFER_SIZE     MAX_MCB_BINARY
 #define PU_BUFFER_SIZE      8192
 
 // todo: update naming to be more unique (ie. ACT_ prefix)
@@ -120,7 +120,7 @@ private:
     PUComm puComm;
 
     // EEPROM interface object
-    PIBStorage pibStorage;
+    PIBConfigs pibConfigs;
 
     // Mode functions (implemented in unique source files)
     void StandbyMode();
@@ -162,12 +162,14 @@ private:
     void HandleMCBASCII();
     void HandleMCBAck();
     void HandleMCBBin();
+    void HandleMCBString();
     uint8_t binary_mcb[MCB_BUFFER_SIZE];
 
     // Handle messages from the PU (in PURouter.cpp)
     void HandlePUASCII();
     void HandlePUAck();
     void HandlePUBin();
+    void HandlePUString();
     uint8_t binary_pu[PU_BUFFER_SIZE];
 
     // Start any type of MCB motion
@@ -184,6 +186,10 @@ private:
 
     // Send a telemetry packet with MCB binary info
     void SendMCBTM(StateFlag_t state_flag, const char * message);
+
+    // Send a telemetry packet with EEPROM contents
+    void SendMCBEEPROM();
+    void SendPIBEEPROM();
 
     // send a telemetry packet with PU TSEN or Profile Record info
     void SendTSENTM();
@@ -217,6 +223,7 @@ private:
     bool pu_no_more_records = false;
     bool pu_warmup = false;
     bool pu_profile = false;
+    bool check_pu_success = false;
 
     // tracks the number of profiles remaining in autonomous mode and if they're scheduled
     uint8_t profiles_remaining = 0;
@@ -241,6 +248,8 @@ private:
 
     // keep a statically allocated array for creating up to 100 char TM state messages
     char log_array[LOG_ARRAY_SIZE] = {0};
+
+    uint8_t eeprom_buffer[256];
 };
 
 #endif /* STRATOPIB_H */

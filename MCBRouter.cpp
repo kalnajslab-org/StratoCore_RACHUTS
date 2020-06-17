@@ -20,6 +20,8 @@ void StratoPIB::RunMCBRouter()
             HandleMCBAck();
         } else if (BIN_MESSAGE == rx_msg) {
             HandleMCBBin();
+        } else if (STRING_MESSAGE == rx_msg) {
+            HandleMCBString();
         } else {
             log_error("Unknown message type from MCB");
         }
@@ -35,12 +37,6 @@ void StratoPIB::HandleMCBASCII()
         log_nominal("MCB motion finished"); // state machine will report to Zephyr
         mcb_motion_ongoing = false;
         break;
-    case MCB_ERROR:
-        if (mcbComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
-            ZephyrLogCrit(log_array);
-            inst_substate = MODE_ERROR;
-        }
-        break;
     case MCB_MOTION_FAULT:
         // if flag already cleared, assume this is the repeat
         if (!mcb_motion_ongoing) return;
@@ -49,7 +45,7 @@ void StratoPIB::HandleMCBASCII()
                                     motion_fault+4, motion_fault+5, motion_fault+6, motion_fault+7)) {
             // expected if docking
             if (mcb_dock_ongoing) { // todo: ensure the correct motion fault flags for dock
-                snprintf(log_array, LOG_ARRAY_SIZE, "MCB: dock condition detected: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
+                snprintf(log_array, LOG_ARRAY_SIZE, "MCB: dock condition assumed: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
                          motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
                 SendMCBTM(FINE, log_array);
                 mcb_dock_ongoing = false;
@@ -123,6 +119,12 @@ void StratoPIB::HandleMCBAck()
     case MCB_CURR_LIMITS:
         ZephyrLogFine("MCB acked curr limits");
         break;
+    case MCB_IGNORE_LIMITS:
+        ZephyrLogFine("MCB acked ignore limits");
+        break;
+    case MCB_USE_LIMITS:
+        ZephyrLogFine("MCB acked use limits");
+        break;
     default:
         log_error("Unknown MCB ack received");
         break;
@@ -144,7 +146,25 @@ void StratoPIB::HandleMCBBin()
         }
         AddMCBTM();
         break;
+    case MCB_EEPROM:
+        SendMCBEEPROM();
+        break;
     default:
         log_error("Unknown MCB bin received");
+    }
+}
+
+void StratoPIB::HandleMCBString()
+{
+    switch (mcbComm.string_rx.str_id) {
+    case MCB_ERROR:
+        if (mcbComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
+            ZephyrLogCrit(log_array);
+            inst_substate = MODE_ERROR;
+        }
+        break;
+    default:
+        log_error("Unknown MCB String message received");
+        break;
     }
 }

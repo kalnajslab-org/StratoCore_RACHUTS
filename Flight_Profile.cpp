@@ -79,7 +79,8 @@ bool StratoPIB::Flight_Profile(bool restart_state)
 
     case ST_SET_PU_WARMUP:
         pu_warmup = false;
-        puComm.TX_WarmUp(pib_config.flash_temp,pib_config.heater1_temp,pib_config.heater2_temp,pib_config.flash_power,pib_config.tsen_power);
+        puComm.TX_WarmUp(pibConfigs.flash_temp.Read(),pibConfigs.heater1_temp.Read(),pibConfigs.heater2_temp.Read(),
+                         pibConfigs.flash_power.Read(),pibConfigs.tsen_power.Read());
         scheduler.AddAction(RESEND_PU_WARMUP, PU_RESEND_TIMEOUT);
         profile_state = ST_CONFIRM_PU_WARMUP;
         break;
@@ -87,7 +88,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_CONFIRM_PU_WARMUP:
         if (pu_warmup) {
             profile_state = ST_WARMUP;
-            scheduler.AddAction(ACTION_END_WARMUP, pib_config.puwarmup_time);
+            scheduler.AddAction(ACTION_END_WARMUP, pibConfigs.puwarmup_time.Read());
         } else if (CheckAction(RESEND_PU_WARMUP)) {
             if (!resend_attempted) {
                 resend_attempted = true;
@@ -114,9 +115,9 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         break;
 
     case ST_SET_PU_PROFILE:
-        retract_length = pib_config.profile_size - pib_config.dock_amount;
-        deploy_length = pib_config.profile_size;
-        dock_length = pib_config.dock_amount + pib_config.dock_overshoot;
+        retract_length = pibConfigs.profile_size.Read() - pibConfigs.dock_amount.Read();
+        deploy_length = pibConfigs.profile_size.Read();
+        dock_length = pibConfigs.dock_amount.Read() + pibConfigs.dock_overshoot.Read();
         pu_profile = false;
         PUStartProfile();
         scheduler.AddAction(RESEND_PU_GOPROFILE, PU_RESEND_TIMEOUT);
@@ -126,7 +127,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
     case ST_CONFIRM_PU_PROFILE:
         if (pu_profile) {
             profile_state = ST_PREPROFILE_WAIT;
-            scheduler.AddAction(ACTION_END_PREPROFILE, pib_config.preprofile_time);
+            scheduler.AddAction(ACTION_END_PREPROFILE, pibConfigs.preprofile_time.Read());
         } else if (CheckAction(RESEND_PU_GOPROFILE)) {
             if (!resend_attempted) {
                 resend_attempted = true;
@@ -181,19 +182,19 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         break;
 
     case ST_VERIFY_DOCK:
-        if (pib_config.pu_docked) {
+        if (pibConfigs.pu_docked.Read()) {
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
             delay(100);
             mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
             scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
             profile_state = ST_CONFIRM_MCB_LP;
         } else {
-            if ((pib_config.num_redock + 1) == ++redock_count) {
+            if ((pibConfigs.num_redock.Read() + 1) == ++redock_count) {
                 ZephyrLogCrit("No dock! Exceeded allowable number of redock attempts");
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             } else {
-                deploy_length = pib_config.redock_out;
-                retract_length = pib_config.redock_in;
+                deploy_length = pibConfigs.redock_out.Read();
+                retract_length = pibConfigs.redock_in.Read();
                 Flight_ReDock(true);
                 profile_state = ST_REDOCK;
             }
@@ -253,7 +254,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
         }
 
         if (CheckAction(ACTION_MOTION_TIMEOUT)) {
-            ZephyrLogCrit("MCB Motion took longer than expected");
+            SendMCBTM(CRIT, "MCB Motion took longer than expected");
             mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;
@@ -264,8 +265,8 @@ bool StratoPIB::Flight_Profile(bool restart_state)
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
                 SendMCBTM(FINE, "Finished profile reel out");
-                if (scheduler.AddAction(ACTION_END_DWELL, pib_config.dwell_time)) {
-                    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pib_config.dwell_time);
+                if (scheduler.AddAction(ACTION_END_DWELL, pibConfigs.dwell_time.Read())) {
+                    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pibConfigs.dwell_time.Read());
                     log_nominal(log_array);
                     profile_state = ST_DWELL;
                 } else {
@@ -279,7 +280,7 @@ bool StratoPIB::Flight_Profile(bool restart_state)
                 profile_state = ST_DOCK_WAIT;
                 break;
             case MOTION_DOCK:
-                SendMCBTM(FINE, "Finished profile dock");
+                // MCB TM sent in MCBRouter handler for MCB_MOTION_FAULT
                 redock_count = 0;
                 Flight_CheckPU(true); // start checking the PU
                 profile_state = ST_GET_PU_STATUS;

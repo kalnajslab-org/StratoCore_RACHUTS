@@ -97,7 +97,7 @@ bool StratoPIB::Flight_ManualMotion(bool restart_state)
         }
 
         if (CheckAction(ACTION_MOTION_TIMEOUT)) {
-            ZephyrLogCrit("MCB Motion took longer than expected");
+            SendMCBTM(CRIT, "MCB Motion took longer than expected");
             mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;
