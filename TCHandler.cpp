@@ -313,12 +313,10 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         break;
 
     // General Telecommands -------------------------------
+    // note that RESET_INST and GETTMBUFFER are implemented in StratoCore
     case EXITERROR:
         SetAction(EXIT_ERROR_STATE);
         ZephyrLogFine("Received exit error command");
-        break;
-    case GETTMBUFFER:
-        SendTMBuffer(); // StratoCore functionality
         break;
     default:
         log_error("Unknown TC received");
