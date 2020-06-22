@@ -27,8 +27,6 @@
 #define PU_RESEND_TIMEOUT       10
 #define ZEPHYR_RESEND_TIMEOUT   60
 
-#define LOG_ARRAY_SIZE  101
-
 #define RETRY_DOCK_LENGTH   2.0f
 
 #define MCB_BUFFER_SIZE     MAX_MCB_BINARY
@@ -144,7 +142,7 @@ private:
     bool Flight_ManualMotion(bool restart_state);
 
     // Telcommand handler - returns ack/nak
-    bool TCHandler(Telecommand_t telecommand);
+    void TCHandler(Telecommand_t telecommand);
 
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);
@@ -245,9 +243,6 @@ private:
 
     // PU status information
     PUStatus_t pu_status = {0};
-
-    // keep a statically allocated array for creating up to 100 char TM state messages
-    char log_array[LOG_ARRAY_SIZE] = {0};
 
     uint8_t eeprom_buffer[256];
 };

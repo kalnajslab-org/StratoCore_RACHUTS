@@ -8,10 +8,8 @@
 
 #include "StratoPIB.h"
 
-bool tc_success = false;
-
 // The telecommand handler must return ACK/NAK
-bool StratoPIB::TCHandler(Telecommand_t telecommand)
+void StratoPIB::TCHandler(Telecommand_t telecommand)
 {
     String dbg_msg = "";
     log_debug("Received telecommand");
@@ -128,7 +126,6 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             ZephyrLogFine("Set mode to auto");
         } else {
             ZephyrLogWarn("Motion ongoing, can't update mode");
-            return false;
         }
         break;
     case SETMANUAL:
@@ -138,7 +135,6 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             ZephyrLogFine("Set mode to manual");
         } else {
             ZephyrLogWarn("Motion ongoing, can't update mode");
-            return false;
         }
         break;
     case SETSZAMIN:
@@ -323,5 +319,4 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         // error case here
         break;
     }
-    return true;
 }
