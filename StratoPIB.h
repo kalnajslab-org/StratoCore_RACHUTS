@@ -193,8 +193,8 @@ private:
     void SendTSENTM();
     void SendProfileTM(uint8_t packet_num);
 
-    // schedule TSEN packets every 15 minutes synchronized with the hour
-    bool ScheduleNextTSEN();
+    // sets an action flag every ten minutes aligned with the hour
+    void CheckTSEN();
 
     // call every time the known state of the PU changes
     void PUDock();

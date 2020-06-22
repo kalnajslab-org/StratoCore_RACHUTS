@@ -49,6 +49,7 @@ void StratoPIB::InstrumentSetup()
 void StratoPIB::InstrumentLoop()
 {
     WatchFlags();
+    CheckTSEN();
 }
 
 // --------------------------------------------------------
@@ -319,28 +320,16 @@ void StratoPIB::SendProfileTM(uint8_t packet_num)
     log_nominal(log_array);
 }
 
-// every 15 minutes, synchronized with the hour
-bool StratoPIB::ScheduleNextTSEN()
+// every 10 minutes, aligned with the hour (called in InstrumentLoop)
+void StratoPIB::CheckTSEN()
 {
-    int32_t temp_seconds = 0;
-    int32_t delta_seconds = 0;
-    TimeElements temp_exact;
+    static time_t last_tsen = 0;
 
-    // get the current time in seconds and the TimeElements struct
-    temp_seconds = now();
-    breakTime(temp_seconds, temp_exact);
-
-    // find the number of seconds until the next 15 minute time
-    delta_seconds = (15 - (temp_exact.Minute % 15)) * 60;
-    delta_seconds -= temp_exact.Second;
-
-    // add the number of seconds to the current time
-    temp_seconds += delta_seconds;
-
-    // remake the struct for the exact desired scheduled time
-    breakTime(temp_seconds, temp_exact);
-
-    return scheduler.AddAction(COMMAND_SEND_TSEN, temp_exact);
+    // check if it's been at least 9 minutes and the current minute is a multiple of 10
+    if ((now() > last_tsen + 540) && (0 == minute() % 10)) {
+        last_tsen = now();
+        SetAction(COMMAND_SEND_TSEN);
+    }
 }
 
 void StratoPIB::PUDock()
