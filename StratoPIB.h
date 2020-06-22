@@ -74,6 +74,7 @@ enum ScheduleAction_t : uint8_t {
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
     COMMAND_SEND_TSEN, // check PU, request TSEN, send TM
     COMMAND_MANUAL_PROFILE,
+    COMMAND_DOCKED_PROFILE,
 
     // used for tracking
     NUM_ACTIONS
@@ -140,6 +141,7 @@ private:
     bool Flight_PUOffload(bool restart_state);
     bool Flight_TSEN(bool restart_state);
     bool Flight_ManualMotion(bool restart_state);
+    bool Flight_DockedProfile(bool restart_state);
 
     // Telcommand handler - returns ack/nak
     void TCHandler(Telecommand_t telecommand);
@@ -221,6 +223,7 @@ private:
     bool pu_no_more_records = false;
     bool pu_warmup = false;
     bool pu_profile = false;
+    bool pu_preprofile = false;
     bool check_pu_success = false;
 
     // tracks the number of profiles remaining in autonomous mode and if they're scheduled
@@ -237,6 +240,9 @@ private:
     float deploy_length = 0.0f;
     float retract_length = 0.0f;
     float dock_length = 0.0f;
+
+    // current docked profile duration
+    uint16_t docked_profile_time = 0;
 
     // array of error values for MCB motion fault
     uint16_t motion_fault[8] = {0};

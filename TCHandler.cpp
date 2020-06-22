@@ -282,6 +282,20 @@ void StratoPIB::TCHandler(Telecommand_t telecommand)
             SendPIBEEPROM();
         }
         break;
+    case DOCKEDPROFILE:
+        if (autonomous_mode) {
+            ZephyrLogWarn("Switch to manual mode before commanding docked profile");
+            break;
+        }
+        log_nominal("Received docked profile telecommand");
+
+        // set the duration
+        docked_profile_time = pibParam.dockedProfileTime;
+
+        // schedule each action
+        SetAction(COMMAND_DOCKED_PROFILE);
+        SetAction(ACTION_OVERRIDE_TSEN);
+        break;
 
     // PU Telecommands ------------------------------------
     case PUWARMUPCONFIGS:
@@ -306,6 +320,15 @@ void StratoPIB::TCHandler(Telecommand_t telecommand)
         break;
     case PURESET:
         puComm.TX_ASCII(PU_RESET);
+        break;
+    case PUDOCKEDCONFIGS:
+        pibConfigs.docked_rate.Write(puParam.dockedRate);
+        pibConfigs.docked_TSEN.Write(puParam.dockedTSEN);
+        pibConfigs.docked_ROPC.Write(puParam.dockedROPC);
+        pibConfigs.docked_FLASH.Write(puParam.dockedFLASH);
+        snprintf(log_array, LOG_ARRAY_SIZE, "New PU docked profile configs: %lu, %u, %u, %u", pibConfigs.docked_rate.Read(),
+                 pibConfigs.docked_TSEN.Read(), pibConfigs.docked_ROPC.Read(), pibConfigs.docked_FLASH.Read());
+        ZephyrLogFine(log_array);
         break;
 
     // General Telecommands -------------------------------

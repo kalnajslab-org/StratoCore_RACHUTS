@@ -33,6 +33,10 @@ PIBConfigs::PIBConfigs()
     , profile_TSEN(1)
     , profile_ROPC(1)
     , profile_FLASH(1)
+    , docked_rate(10)
+    , docked_TSEN(1)
+    , docked_ROPC(1)
+    , docked_FLASH(1)
     , dwell_time(900)
     , preprofile_time(180)
     , puwarmup_time(900)
@@ -77,6 +81,10 @@ void PIBConfigs::RegisterAll()
     success &= Register(&num_profiles);
     success &= Register(&num_redock);
     success &= Register(&pu_docked);
+    success &= Register(&docked_rate);
+    success &= Register(&docked_TSEN);
+    success &= Register(&docked_ROPC);
+    success &= Register(&docked_FLASH);
 
     if (!success) {
         debug_serial->println("Error registering EEPROM configs");
