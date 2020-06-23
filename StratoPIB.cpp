@@ -180,16 +180,19 @@ void StratoPIB::AddMCBTM()
         return;
     }
 
-    // sync byte
-    if (!zephyrTX.addTm((uint8_t) 0xA5)) {
-        log_error("unable to add sync byte to MCB TM buffer");
-        return;
-    }
+    // if not in real-time mode, add the sync and time
+    if (!pibConfigs.real_time_mcb.Read()) {
+        // sync byte
+        if (!zephyrTX.addTm((uint8_t) 0xA5)) {
+            log_error("unable to add sync byte to MCB TM buffer");
+            return;
+        }
 
-    // tenths of seconds since start
-    if (!zephyrTX.addTm((uint16_t) ((millis() - profile_start) / 100))) {
-        log_error("unable to add seconds bytes to MCB TM buffer");
-        return;
+        // tenths of seconds since start
+        if (!zephyrTX.addTm((uint16_t) ((millis() - profile_start) / 100))) {
+            log_error("unable to add seconds bytes to MCB TM buffer");
+            return;
+        }
     }
 
     // add each byte of data to the message
@@ -198,6 +201,17 @@ void StratoPIB::AddMCBTM()
             log_error("unable to add data byte to MCB TM buffer");
             return;
         }
+    }
+
+    // if real-time mode, send the TM packet
+    if (pibConfigs.real_time_mcb.Read()) {
+        snprintf(log_array, LOG_ARRAY_SIZE, "MCB TM Packet %u", ++mcb_tm_counter);
+        zephyrTX.setStateDetails(1, log_array);
+        zephyrTX.setStateFlagValue(1, FINE);
+        zephyrTX.setStateFlagValue(2, NOMESS);
+        zephyrTX.setStateFlagValue(3, NOMESS);
+        zephyrTX.TM();
+        log_nominal(log_array);
     }
 }
 
@@ -208,11 +222,14 @@ void StratoPIB::NoteProfileStart()
 
     if (MOTION_DOCK == mcb_motion || MOTION_IN_NO_LW == mcb_motion) mcb_dock_ongoing = true;
 
+    mcb_tm_counter = 0;
+
     zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
 
-    // MCB TM Header
-    zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
-    // add to header: profile type, auto vs. manual, auto trigger?
+    // Add the start time to the MCB TM Header if not in real-time mode
+    if (!pibConfigs.real_time_mcb.Read()) {
+        zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
+    }
 }
 
 void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)

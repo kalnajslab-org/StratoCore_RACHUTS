@@ -296,6 +296,22 @@ void StratoPIB::TCHandler(Telecommand_t telecommand)
         SetAction(COMMAND_DOCKED_PROFILE);
         SetAction(ACTION_OVERRIDE_TSEN);
         break;
+    case STARTREALTIMEMCB:
+        if (mcb_motion_ongoing) {
+            ZephyrLogWarn("Cannot start real-time MCB mode, motion ongoing");
+        } else {
+            pibConfigs.real_time_mcb.Write(true);
+            ZephyrLogFine("Started real-time MCB mode");
+        }
+        break;
+    case EXITREALTIMEMCB:
+        if (mcb_motion_ongoing) {
+            ZephyrLogWarn("Cannot exit real-time MCB mode, motion ongoing");
+        } else {
+            pibConfigs.real_time_mcb.Write(false);
+            ZephyrLogFine("Exited real-time MCB mode");
+        }
+        break;
 
     // PU Telecommands ------------------------------------
     case PUWARMUPCONFIGS:

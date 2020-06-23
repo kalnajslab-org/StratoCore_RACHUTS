@@ -216,6 +216,7 @@ private:
     bool mcb_dock_ongoing = false;
     uint32_t max_profile_seconds = 0;
     bool mcb_reeling_in = false;
+    uint16_t mcb_tm_counter = 0;
 
     // flags for PU state tracking
     bool record_received = false;
