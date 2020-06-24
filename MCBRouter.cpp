@@ -34,10 +34,12 @@ void StratoPIB::HandleMCBASCII()
 {
     switch (mcbComm.ascii_rx.msg_id) {
     case MCB_MOTION_FINISHED:
+        CheckAction(ACTION_MOTION_TIMEOUT); // clear the timeout
         log_nominal("MCB motion finished"); // state machine will report to Zephyr
         mcb_motion_ongoing = false;
         break;
     case MCB_MOTION_FAULT:
+        CheckAction(ACTION_MOTION_TIMEOUT); // clear the timeout
         // if flag already cleared, assume this is the repeat
         if (!mcb_motion_ongoing) return;
 

@@ -23,6 +23,7 @@ enum FLStates_t : uint8_t {
     FLM_TSEN,
     FLM_PU_OFFLOAD,
     FLM_PROFILE,
+    FLM_DOCKED,
 
     // autonomous
     FLA_IDLE,
@@ -62,10 +63,6 @@ void StratoPIB::FlightMode()
         log_debug("Waiting on GPS time");
         if (time_valid) {
             inst_substate = (autonomous_mode) ? FLA_IDLE : FLM_IDLE;
-            if (!ScheduleNextTSEN()) {
-                ZephyrLogCrit("Unable to schedule next TSEN read");
-                inst_substate = FL_ERROR_LANDING;
-            }
         }
         break;
     case FL_ERROR_LANDING:
@@ -155,6 +152,10 @@ void StratoPIB::ManualFlight()
             log_nominal("Offload PU Manual");
             Flight_PUOffload(true);
             inst_substate = FLM_PU_OFFLOAD;
+        } else if (CheckAction(COMMAND_DOCKED_PROFILE)) {
+            log_nominal("Docked profile");
+            Flight_DockedProfile(true);
+            inst_substate = FLM_DOCKED;
         }
         break;
 
@@ -184,10 +185,6 @@ void StratoPIB::ManualFlight()
     case FLM_TSEN:
         if (Flight_TSEN(false)) {
             inst_substate = FLM_IDLE;
-            if (!ScheduleNextTSEN()) {
-                ZephyrLogCrit("Unable to schedule next TSEN read");
-                inst_substate = FL_ERROR_LANDING;
-            }
         }
         break;
 
@@ -200,10 +197,12 @@ void StratoPIB::ManualFlight()
     case FLM_PROFILE:
         if (Flight_Profile(false)) {
             inst_substate = FLM_IDLE;
-            if (!ScheduleNextTSEN()) {
-                ZephyrLogCrit("Unable to schedule next TSEN read");
-                inst_substate = FL_ERROR_LANDING;
-            }
+        }
+        break;
+
+    case FLM_DOCKED:
+        if (Flight_DockedProfile(false)) {
+            inst_substate = FLM_IDLE;
         }
         break;
 
@@ -217,10 +216,14 @@ void StratoPIB::AutonomousFlight()
 {
     switch (inst_substate) {
     case FLA_IDLE:
+        // reset profile schedule
         if (zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
             profiles_remaining = pibConfigs.num_profiles.Read();
             profiles_scheduled = false;
-        } else if (0 != profiles_remaining && pibConfigs.sza_trigger.Read() && zephyrRX.zephyr_gps.solar_zenith_angle > pibConfigs.sza_minimum.Read()) {
+        }
+
+        // check for profiles or TSEN
+        if (0 != profiles_remaining && pibConfigs.sza_trigger.Read() && zephyrRX.zephyr_gps.solar_zenith_angle > pibConfigs.sza_minimum.Read()) {
             if (profiles_scheduled) {
                 inst_substate = FLA_WAIT_PROFILE;
             } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
@@ -257,10 +260,6 @@ void StratoPIB::AutonomousFlight()
     case FLA_TSEN:
         if (Flight_TSEN(false)) {
             inst_substate = FLA_IDLE;
-            if (!ScheduleNextTSEN()) {
-                ZephyrLogCrit("Unable to schedule next TSEN read");
-                inst_substate = FL_ERROR_LANDING;
-            }
         }
         break;
 
@@ -280,12 +279,7 @@ void StratoPIB::AutonomousFlight()
     case FLA_NOTE_PROFILE_END:
         if (profiles_remaining != 0) profiles_remaining--;
 
-        if (!ScheduleNextTSEN()) {
-            ZephyrLogCrit("Unable to schedule next TSEN read");
-            inst_substate = FL_ERROR_LANDING;
-        } else {
-            inst_substate = FLA_IDLE;
-        }
+        inst_substate = FLA_IDLE;
         break;
 
     default:

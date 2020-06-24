@@ -27,8 +27,6 @@
 #define PU_RESEND_TIMEOUT       10
 #define ZEPHYR_RESEND_TIMEOUT   60
 
-#define LOG_ARRAY_SIZE  101
-
 #define RETRY_DOCK_LENGTH   2.0f
 
 #define MCB_BUFFER_SIZE     MAX_MCB_BINARY
@@ -76,6 +74,7 @@ enum ScheduleAction_t : uint8_t {
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
     COMMAND_SEND_TSEN, // check PU, request TSEN, send TM
     COMMAND_MANUAL_PROFILE,
+    COMMAND_DOCKED_PROFILE,
 
     // used for tracking
     NUM_ACTIONS
@@ -142,9 +141,10 @@ private:
     bool Flight_PUOffload(bool restart_state);
     bool Flight_TSEN(bool restart_state);
     bool Flight_ManualMotion(bool restart_state);
+    bool Flight_DockedProfile(bool restart_state);
 
     // Telcommand handler - returns ack/nak
-    bool TCHandler(Telecommand_t telecommand);
+    void TCHandler(Telecommand_t telecommand);
 
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);
@@ -195,8 +195,8 @@ private:
     void SendTSENTM();
     void SendProfileTM(uint8_t packet_num);
 
-    // schedule TSEN packets every 15 minutes synchronized with the hour
-    bool ScheduleNextTSEN();
+    // sets an action flag every ten minutes aligned with the hour
+    void CheckTSEN();
 
     // call every time the known state of the PU changes
     void PUDock();
@@ -216,6 +216,7 @@ private:
     bool mcb_dock_ongoing = false;
     uint32_t max_profile_seconds = 0;
     bool mcb_reeling_in = false;
+    uint16_t mcb_tm_counter = 0;
 
     // flags for PU state tracking
     bool record_received = false;
@@ -223,6 +224,7 @@ private:
     bool pu_no_more_records = false;
     bool pu_warmup = false;
     bool pu_profile = false;
+    bool pu_preprofile = false;
     bool check_pu_success = false;
 
     // tracks the number of profiles remaining in autonomous mode and if they're scheduled
@@ -240,14 +242,14 @@ private:
     float retract_length = 0.0f;
     float dock_length = 0.0f;
 
+    // current docked profile duration
+    uint16_t docked_profile_time = 0;
+
     // array of error values for MCB motion fault
     uint16_t motion_fault[8] = {0};
 
     // PU status information
     PUStatus_t pu_status = {0};
-
-    // keep a statically allocated array for creating up to 100 char TM state messages
-    char log_array[LOG_ARRAY_SIZE] = {0};
 
     uint8_t eeprom_buffer[256];
 };

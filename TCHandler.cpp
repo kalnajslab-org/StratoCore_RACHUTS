@@ -8,10 +8,8 @@
 
 #include "StratoPIB.h"
 
-bool tc_success = false;
-
 // The telecommand handler must return ACK/NAK
-bool StratoPIB::TCHandler(Telecommand_t telecommand)
+void StratoPIB::TCHandler(Telecommand_t telecommand)
 {
     String dbg_msg = "";
     log_debug("Received telecommand");
@@ -128,7 +126,6 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             ZephyrLogFine("Set mode to auto");
         } else {
             ZephyrLogWarn("Motion ongoing, can't update mode");
-            return false;
         }
         break;
     case SETMANUAL:
@@ -138,7 +135,6 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             ZephyrLogFine("Set mode to manual");
         } else {
             ZephyrLogWarn("Motion ongoing, can't update mode");
-            return false;
         }
         break;
     case SETSZAMIN:
@@ -255,6 +251,7 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         log_nominal("Received offload PU profile TC");
 
         SetAction(ACTION_OFFLOAD_PU);
+        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case SETPREPROFILETIME:
         pibConfigs.preprofile_time.Write(pibParam.preprofileTime);
@@ -286,6 +283,36 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
             SendPIBEEPROM();
         }
         break;
+    case DOCKEDPROFILE:
+        if (autonomous_mode) {
+            ZephyrLogWarn("Switch to manual mode before commanding docked profile");
+            break;
+        }
+        log_nominal("Received docked profile telecommand");
+
+        // set the duration
+        docked_profile_time = pibParam.dockedProfileTime;
+
+        // schedule each action
+        SetAction(COMMAND_DOCKED_PROFILE);
+        SetAction(ACTION_OVERRIDE_TSEN);
+        break;
+    case STARTREALTIMEMCB:
+        if (mcb_motion_ongoing) {
+            ZephyrLogWarn("Cannot start real-time MCB mode, motion ongoing");
+        } else {
+            pibConfigs.real_time_mcb.Write(true);
+            ZephyrLogFine("Started real-time MCB mode");
+        }
+        break;
+    case EXITREALTIMEMCB:
+        if (mcb_motion_ongoing) {
+            ZephyrLogWarn("Cannot exit real-time MCB mode, motion ongoing");
+        } else {
+            pibConfigs.real_time_mcb.Write(false);
+            ZephyrLogFine("Exited real-time MCB mode");
+        }
+        break;
 
     // PU Telecommands ------------------------------------
     case PUWARMUPCONFIGS:
@@ -311,6 +338,15 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
     case PURESET:
         puComm.TX_ASCII(PU_RESET);
         break;
+    case PUDOCKEDCONFIGS:
+        pibConfigs.docked_rate.Write(puParam.dockedRate);
+        pibConfigs.docked_TSEN.Write(puParam.dockedTSEN);
+        pibConfigs.docked_ROPC.Write(puParam.dockedROPC);
+        pibConfigs.docked_FLASH.Write(puParam.dockedFLASH);
+        snprintf(log_array, LOG_ARRAY_SIZE, "New PU docked profile configs: %lu, %u, %u, %u", pibConfigs.docked_rate.Read(),
+                 pibConfigs.docked_TSEN.Read(), pibConfigs.docked_ROPC.Read(), pibConfigs.docked_FLASH.Read());
+        ZephyrLogFine(log_array);
+        break;
 
     // General Telecommands -------------------------------
     // note that RESET_INST and GETTMBUFFER are implemented in StratoCore
@@ -318,10 +354,11 @@ bool StratoPIB::TCHandler(Telecommand_t telecommand)
         SetAction(EXIT_ERROR_STATE);
         ZephyrLogFine("Received exit error command");
         break;
+
+    // Error case -----------------------------------------
     default:
-        log_error("Unknown TC received");
-        // error case here
+        snprintf(log_array, LOG_ARRAY_SIZE, "Unknown TC ID: %u", telecommand);
+        ZephyrLogWarn(log_array);
         break;
     }
-    return true;
 }

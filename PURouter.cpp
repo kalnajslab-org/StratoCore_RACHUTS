@@ -65,6 +65,10 @@ void StratoPIB::HandlePUAck()
         log_nominal("PU in profile");
         pu_profile = true;
         break;
+    case PU_GO_PREPROFILE:
+        log_nominal("PU in preprofile");
+        pu_preprofile = true;
+        break;
     case PU_RESET:
         ZephyrLogFine("PU acked reset");
         break;

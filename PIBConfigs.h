@@ -4,6 +4,12 @@
  *  Created: April 2020
  *
  *  This class manages configuration storage in EEPROM on the PIB
+ *
+ *  To add a configuration value:
+ *    1) Add a public EEPROMData<T> object in the header file
+ *    2) Set the hard-coded backup value in the constructor
+ *    3) Register the object in the RegisterAll method
+ *    *note* maintain the order of objects in all three locations
  */
 
 #ifndef PIBCONFIGS_H
@@ -19,7 +25,7 @@ public:
     PIBConfigs();
 
     // constants, manually change version number here to force update
-    static const uint16_t CONFIG_VERSION = 0x5C00;
+    static const uint16_t CONFIG_VERSION = 0x5C02;
     static const uint16_t BASE_ADDRESS = 0x0000;
 
     // ------------------ Configurations ------------------
@@ -52,6 +58,10 @@ public:
     EEPROMData<uint8_t> profile_TSEN;
     EEPROMData<uint8_t> profile_ROPC;
     EEPROMData<uint8_t> profile_FLASH;
+    EEPROMData<uint32_t> docked_rate;
+    EEPROMData<uint8_t> docked_TSEN;
+    EEPROMData<uint8_t> docked_ROPC;
+    EEPROMData<uint8_t> docked_FLASH;
 
     // profile timing (seconds)
     EEPROMData<uint16_t> dwell_time;
@@ -66,6 +76,9 @@ public:
 
     // PU tracking
     EEPROMData<bool> pu_docked;
+
+    // MCB TM mode
+    EEPROMData<bool> real_time_mcb;
 
     // ----------------------------------------------------
 

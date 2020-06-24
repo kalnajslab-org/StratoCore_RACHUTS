@@ -49,6 +49,7 @@ void StratoPIB::InstrumentSetup()
 void StratoPIB::InstrumentLoop()
 {
     WatchFlags();
+    CheckTSEN();
 }
 
 // --------------------------------------------------------
@@ -179,16 +180,19 @@ void StratoPIB::AddMCBTM()
         return;
     }
 
-    // sync byte
-    if (!zephyrTX.addTm((uint8_t) 0xA5)) {
-        log_error("unable to add sync byte to MCB TM buffer");
-        return;
-    }
+    // if not in real-time mode, add the sync and time
+    if (!pibConfigs.real_time_mcb.Read()) {
+        // sync byte
+        if (!zephyrTX.addTm((uint8_t) 0xA5)) {
+            log_error("unable to add sync byte to MCB TM buffer");
+            return;
+        }
 
-    // tenths of seconds since start
-    if (!zephyrTX.addTm((uint16_t) ((millis() - profile_start) / 100))) {
-        log_error("unable to add seconds bytes to MCB TM buffer");
-        return;
+        // tenths of seconds since start
+        if (!zephyrTX.addTm((uint16_t) ((millis() - profile_start) / 100))) {
+            log_error("unable to add seconds bytes to MCB TM buffer");
+            return;
+        }
     }
 
     // add each byte of data to the message
@@ -197,6 +201,17 @@ void StratoPIB::AddMCBTM()
             log_error("unable to add data byte to MCB TM buffer");
             return;
         }
+    }
+
+    // if real-time mode, send the TM packet
+    if (pibConfigs.real_time_mcb.Read()) {
+        snprintf(log_array, LOG_ARRAY_SIZE, "MCB TM Packet %u", ++mcb_tm_counter);
+        zephyrTX.setStateDetails(1, log_array);
+        zephyrTX.setStateFlagValue(1, FINE);
+        zephyrTX.setStateFlagValue(2, NOMESS);
+        zephyrTX.setStateFlagValue(3, NOMESS);
+        zephyrTX.TM();
+        log_nominal(log_array);
     }
 }
 
@@ -207,11 +222,14 @@ void StratoPIB::NoteProfileStart()
 
     if (MOTION_DOCK == mcb_motion || MOTION_IN_NO_LW == mcb_motion) mcb_dock_ongoing = true;
 
+    mcb_tm_counter = 0;
+
     zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
 
-    // MCB TM Header
-    zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
-    // add to header: profile type, auto vs. manual, auto trigger?
+    // Add the start time to the MCB TM Header if not in real-time mode
+    if (!pibConfigs.real_time_mcb.Read()) {
+        zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
+    }
 }
 
 void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
@@ -319,28 +337,16 @@ void StratoPIB::SendProfileTM(uint8_t packet_num)
     log_nominal(log_array);
 }
 
-// every 15 minutes, synchronized with the hour
-bool StratoPIB::ScheduleNextTSEN()
+// every 10 minutes, aligned with the hour (called in InstrumentLoop)
+void StratoPIB::CheckTSEN()
 {
-    int32_t temp_seconds = 0;
-    int32_t delta_seconds = 0;
-    TimeElements temp_exact;
+    static time_t last_tsen = 0;
 
-    // get the current time in seconds and the TimeElements struct
-    temp_seconds = now();
-    breakTime(temp_seconds, temp_exact);
-
-    // find the number of seconds until the next 15 minute time
-    delta_seconds = (15 - (temp_exact.Minute % 15)) * 60;
-    delta_seconds -= temp_exact.Second;
-
-    // add the number of seconds to the current time
-    temp_seconds += delta_seconds;
-
-    // remake the struct for the exact desired scheduled time
-    breakTime(temp_seconds, temp_exact);
-
-    return scheduler.AddAction(COMMAND_SEND_TSEN, temp_exact);
+    // check if it's been at least 9 minutes and the current minute is a multiple of 10
+    if ((now() > last_tsen + 540) && (0 == minute() % 10)) {
+        last_tsen = now();
+        SetAction(COMMAND_SEND_TSEN);
+    }
 }
 
 void StratoPIB::PUDock()
