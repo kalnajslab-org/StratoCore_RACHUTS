@@ -251,6 +251,7 @@ void StratoPIB::TCHandler(Telecommand_t telecommand)
         log_nominal("Received offload PU profile TC");
 
         SetAction(ACTION_OFFLOAD_PU);
+        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case SETPREPROFILETIME:
         pibConfigs.preprofile_time.Write(pibParam.preprofileTime);
@@ -353,9 +354,11 @@ void StratoPIB::TCHandler(Telecommand_t telecommand)
         SetAction(EXIT_ERROR_STATE);
         ZephyrLogFine("Received exit error command");
         break;
+
+    // Error case -----------------------------------------
     default:
-        log_error("Unknown TC received");
-        // error case here
+        snprintf(log_array, LOG_ARRAY_SIZE, "Unknown TC ID: %u", telecommand);
+        ZephyrLogWarn(log_array);
         break;
     }
 }
