@@ -6,6 +6,8 @@ This repository contains the code to run the Profiler Interface Board (PIB) on t
 
 All of the instruments use [Teensy 3.6](https://www.sparkfun.com/products/14057) Arduino-compatible MCU boards as the primary computer. Thus, this and all other Strateole 2 code is implemented for Arduino, meaning that all of this C++ code uses the Arduino drivers for the Teensy 3.6 and is compiled using the Arduino IDE with the [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html) plug-in.
 
+The Arduino main file can be found in `examples/StratoPIB_Main.ino`. To compile and load StratoPIB, open this main file in Arduino and follow the Teensyduino instructions.
+
 *StratoPIB is known to work with Arduino 1.8.4 and Teensyduino 1.39, as well as with Arduino 1.8.11 and Teensyduino 1.51*
 
 ## RACHuTS Overview
