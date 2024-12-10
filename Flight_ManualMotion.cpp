@@ -34,6 +34,8 @@ bool StratoPIB::Flight_ManualMotion(bool restart_state)
         break;
 
     case ST_WAIT_RAACK:
+        if(pibConfigs.ra_override.Read()) //Over Ride RA requirement in an emergency
+            RA_ack_flag = ACK;
         if (ACK == RA_ack_flag) {
             manualmotion_state = ST_START_MOTION;
             resend_attempted = false;
