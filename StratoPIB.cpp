@@ -46,12 +46,12 @@ void StratoPIB::InstrumentSetup()
     //Teensy Analog setup
     analogReadResolution(12); //Set to 12 bits (0 - 4095)
     analogReadAveraging(32); //average 32 samples
-    analogReference(EXTERNAL); //use 3.000V external ref.
+
 
     // Set up the second SPI Port for the LoRa Module
-    SPI1.setSCK(20);
-    SPI1.setMISO(5);
-    SPI1.setMOSI(21);
+    SPI1.setSCK(LORA_SCK);
+    SPI1.setMISO(LORA_MISO);
+    SPI1.setMOSI(LORA_MOSI));
 
     LoRa.setSPI(SPI1);
     LoRa.setPins(SS_PIN, RESET_PIN,INTERUPT_PIN);
