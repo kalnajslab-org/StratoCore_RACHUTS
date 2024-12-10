@@ -68,8 +68,9 @@ bool StratoPIB::Flight_DockedProfile(bool restart_state)
         pu_preprofile = false;
 
         // FIXME: replace the TX_PreProfile with a dedicated command, figure out data transmission
-        puComm.TX_PreProfile(docked_profile_time, 10, pibConfigs.docked_rate.Read(), pibConfigs.docked_TSEN.Read(),
-                             pibConfigs.docked_ROPC.Read(), pibConfigs.docked_FLASH.Read());
+        //LEK 8_2021: Just use the profile command to PU with short dwell and up times and LoRa off
+        pu_preprofile = puComm.TX_Profile(docked_profile_time-10, 5,5, pibConfigs.docked_rate.Read(), 1,pibConfigs.docked_TSEN.Read(),
+                             pibConfigs.docked_ROPC.Read(), pibConfigs.docked_FLASH.Read(),0);
 
         scheduler.AddAction(RESEND_PU_GOPROFILE, PU_RESEND_TIMEOUT);
         profile_state = ST_CONFIRM_PU_PREPROFILE;
@@ -79,6 +80,7 @@ bool StratoPIB::Flight_DockedProfile(bool restart_state)
         if (pu_preprofile) {
             profile_state = ST_PREPROFILE_WAIT;
             scheduler.AddAction(ACTION_END_PREPROFILE, docked_profile_time);
+            pibConfigs.profile_id.Write(pibConfigs.profile_id.Read()+1); //increment the profile counter
         } else if (CheckAction(RESEND_PU_GOPROFILE)) {
             if (!resend_attempted) {
                 resend_attempted = true;
@@ -94,6 +96,12 @@ bool StratoPIB::Flight_DockedProfile(bool restart_state)
     case ST_PREPROFILE_WAIT:
         if (CheckAction(ACTION_END_PREPROFILE)) {
             ZephyrLogFine("Finished docked profile");
+            if(pibConfigs.pu_auto_offload.Read())
+            {
+                Serial.println("Begin Automatic PU Offload");
+                SetAction(ACTION_OFFLOAD_PU);
+                SetAction(ACTION_OVERRIDE_TSEN);
+            }
             return true;
         }
         break;
