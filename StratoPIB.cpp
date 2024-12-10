@@ -2,11 +2,21 @@
  *  StratoPIB.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
+ *  Updated for MonDo board: November 2020 (LEK)
+ *  Updated for T4.1 and Mondo Rev E 2024 (LEK)
  *
  *  This file implements an Arduino library (C++ class) that inherits
  *  from the StratoCore class. It serves as the overarching class
  *  for the RACHuTS Profiler Interface Board, or PIB.
  */
+
+int PacketSize = 0;
+
+//ISR for LoRa reception, needs to be outside the class for some reason
+void onReceive(int Size)
+{
+    PacketSize = Size;
+}
 
 #include "StratoPIB.h"
 
@@ -24,11 +34,6 @@ StratoPIB::StratoPIB()
 // note serial setup occurs in main arduino file
 void StratoPIB::InstrumentSetup()
 {
-    // for RS232 transceiver
-    pinMode(FORCEOFF_232, OUTPUT);
-    pinMode(FORCEON_232, OUTPUT);
-    digitalWrite(FORCEOFF_232, HIGH);
-    digitalWrite(FORCEON_232, HIGH);
 
     // safe pin required by Zephyr
     pinMode(SAFE_PIN, OUTPUT);
@@ -37,6 +42,24 @@ void StratoPIB::InstrumentSetup()
     // PU power switch
     pinMode(PU_PWR_ENABLE, OUTPUT);
     digitalWrite(PU_PWR_ENABLE, LOW);
+
+    //Teensy Analog setup
+    analogReadResolution(12); //Set to 12 bits (0 - 4095)
+    analogReadAveraging(32); //average 32 samples
+    analogReference(EXTERNAL); //use 3.000V external ref.
+
+    // Set up the second SPI Port for the LoRa Module
+    SPI1.setSCK(20);
+    SPI1.setMISO(5);
+    SPI1.setMOSI(21);
+
+    LoRa.setSPI(SPI1);
+    LoRa.setPins(SS_PIN, RESET_PIN,INTERUPT_PIN);
+    
+    LoRaInit();  //initialize the LoRa modem
+
+    LoRa.onReceive(onReceive);
+    LoRa.receive();
 
     if (!pibConfigs.Initialize()) {
         ZephyrLogWarn("Error loading from EEPROM! Reconfigured");
@@ -50,6 +73,101 @@ void StratoPIB::InstrumentLoop()
 {
     WatchFlags();
     CheckTSEN();
+    LoRaRX();
+}
+
+void StratoPIB::LoRaInit()
+{
+   if (!LoRa.begin(FREQUENCY)){
+       ZephyrLogWarn("Starting LoRa failed!");
+       Serial.println("WARN: LoRa Initializtion Failed");
+    }
+    delay(1);
+    LoRa.setSpreadingFactor(SF);
+    delay(1);
+    LoRa.setSignalBandwidth(BANDWIDTH);
+    delay(1);
+    LoRa.setTxPower(RF_POWER);
+}
+
+void StratoPIB::LoRaRX()
+{
+    int i = 0;
+
+    if (PacketSize > 0) //if LoRa data is available
+    {
+        PacketSize = 0;
+        Serial.print("Received Packet with RSSI :");
+        Serial.print(LoRa.packetRssi());
+        int BytesToRead = LoRa.available();
+        Serial.printf(" Bytes Read: %d\n",BytesToRead);
+        for (i = 0; i <  BytesToRead; i++)
+           LoRa_RX_buffer[i] = LoRa.read();
+        
+        //for (i = 0; i< BytesToRead; i++ ) //for debug write buffer to consols
+        //    Serial.write(LoRa_RX_buffer[i]);
+        //Serial.println();
+
+        if (strncmp(LoRa_RX_buffer,"ST",2) == 0)//it is a status packet
+        { 
+            LoRa_RX_buffer[BytesToRead] = '\0'; //null terminate buffer to make a string
+            snprintf(log_array, LOG_ARRAY_SIZE, "PU %s,%0.1f,%0.1f", LoRa_RX_buffer, reel_pos, PU_Ir_mon);
+            ZephyrLogFine(LoRa_RX_buffer);
+
+        }
+
+        else if (strncmp(LoRa_RX_buffer,"TM",2) == 0) //it is a profile TM packet
+        {
+                Serial.print("TM Packet idx: ");
+                Serial.println(LoRa_TM_buffer_idx);
+                LoRa_rx_time = millis();  //record the time we received last LoRa TM
+                if (LoRa_TM_buffer_idx + BytesToRead > 6005) //if the incomming packet will over fill a TM send what we have
+                {
+                    //send the LoRa PU data to zephyr as a TM
+                    snprintf(log_array, LOG_ARRAY_SIZE, "PU LoRa TM: %u.%u, %0.1f, %0.4f, %0.4f, %0.1f",pibConfigs.profile_id.Read(),++pu_tm_counter,reel_pos,profile_start_latitude, profile_start_longitude, profile_start_altitude);
+                    zephyrTX.addTm(LoRa_TM_buffer,LoRa_TM_buffer_idx);
+                    zephyrTX.setStateDetails(1, log_array);
+                    zephyrTX.setStateFlagValue(1, FINE);
+                    zephyrTX.setStateFlagValue(2, NOMESS);
+                    zephyrTX.setStateFlagValue(3, NOMESS);
+                    zephyrTX.TM();
+                    log_nominal(log_array);
+                    LoRa_TM_buffer_idx = 0; //reset the buffer
+                    zephyrTX.clearTm();
+                }
+                
+                for(i = 0; i < BytesToRead-2; i++)
+                    LoRa_TM_buffer[LoRa_TM_buffer_idx++] = LoRa_RX_buffer[i+2];
+                BytesToRead = 0;
+            
+        }
+
+        else
+        {
+            snprintf(log_array, LOG_ARRAY_SIZE, "Received Unknown LoRa Packet");
+            log_nominal(log_array);
+        }
+
+        
+    }
+
+    //if it has been a while since we received a LoRa TM, assume it is done and send remaining data
+    if (LoRa_TM_buffer_idx > 0){
+        if ((millis() - LoRa_rx_time) > LORA_TM_TIMEOUT*1000) 
+        {
+                    zephyrTX.addTm(LoRa_TM_buffer,LoRa_TM_buffer_idx);            
+                    //send the LoRa_TM_Buffer to zephyr as a TM
+                    snprintf(log_array, LOG_ARRAY_SIZE, "PU LoRa TM: %u.%u, %0.1f, %0.4f, %0.4f, %0.1f",pibConfigs.profile_id.Read(),++pu_tm_counter,reel_pos,profile_start_latitude, profile_start_longitude, profile_start_altitude);
+                    zephyrTX.setStateDetails(1, log_array);
+                    zephyrTX.setStateFlagValue(1, FINE);
+                    zephyrTX.setStateFlagValue(2, NOMESS);
+                    zephyrTX.setStateFlagValue(3, NOMESS);
+                    zephyrTX.TM();
+                    log_nominal(log_array);
+                    LoRa_TM_buffer_idx = 0; //reset the buffer
+                    pu_tm_counter = 0; //reset the TM counter
+        }
+    }
 }
 
 // --------------------------------------------------------
@@ -182,36 +300,31 @@ void StratoPIB::AddMCBTM()
 
     // if not in real-time mode, add the sync and time
     if (!pibConfigs.real_time_mcb.Read()) {
-        // sync byte
-        if (!zephyrTX.addTm((uint8_t) 0xA5)) {
-            log_error("unable to add sync byte to MCB TM buffer");
-            return;
-        }
-
+        // sync byte        
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) 0xA5;
+                
         // tenths of seconds since start
-        if (!zephyrTX.addTm((uint16_t) ((millis() - profile_start) / 100))) {
-            log_error("unable to add seconds bytes to MCB TM buffer");
-            return;
-        }
+        uint16_t elapsed_time = (uint16_t)((millis() - profile_start) / 100);
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) (elapsed_time >> 8);
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) (elapsed_time & 0xFF);
     }
 
     // add each byte of data to the message
     for (int i = 0; i < MOTION_TM_SIZE; i++) {
-        if (!zephyrTX.addTm(mcbComm.binary_rx.bin_buffer[i])) {
-            log_error("unable to add data byte to MCB TM buffer");
-            return;
-        }
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = mcbComm.binary_rx.bin_buffer[i];
     }
 
     // if real-time mode, send the TM packet
     if (pibConfigs.real_time_mcb.Read()) {
         snprintf(log_array, LOG_ARRAY_SIZE, "MCB TM Packet %u", ++mcb_tm_counter);
+        zephyrTX.addTm(MCB_TM_buffer,MCB_TM_buffer_idx);
         zephyrTX.setStateDetails(1, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
         zephyrTX.setStateFlagValue(2, NOMESS);
         zephyrTX.setStateFlagValue(3, NOMESS);
         zephyrTX.TM();
         log_nominal(log_array);
+        MCB_TM_buffer_idx = 0; //reser the MCB buffer pointer
     }
 }
 
@@ -223,18 +336,25 @@ void StratoPIB::NoteProfileStart()
     if (MOTION_DOCK == mcb_motion || MOTION_IN_NO_LW == mcb_motion) mcb_dock_ongoing = true;
 
     mcb_tm_counter = 0;
-
-    zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
-
+    //zephyrTX.clearTm(); // empty the TM buffer for incoming MCB motion data
+    MCB_TM_buffer_idx = 0;
     // Add the start time to the MCB TM Header if not in real-time mode
     if (!pibConfigs.real_time_mcb.Read()) {
-        zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
+        //zephyrTX.addTm((uint32_t) now()); // as a header, add the current seconds since epoch
+        uint32_t ProfileStartEpoch  = now();
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) (ProfileStartEpoch >> 24);
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) (ProfileStartEpoch >> 16);
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) (ProfileStartEpoch >> 8);
+        MCB_TM_buffer[MCB_TM_buffer_idx++] = (uint8_t) (ProfileStartEpoch & 0xFF);
     }
+
+
 }
 
 void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
 {
     // use only the first flag to report the motion
+    zephyrTX.addTm(MCB_TM_buffer,MCB_TM_buffer_idx);
     zephyrTX.setStateDetails(1, message);
     zephyrTX.setStateFlagValue(1, state_flag);
     zephyrTX.setStateFlagValue(2, NOMESS);
@@ -243,8 +363,8 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
     TM_ack_flag = NO_ACK;
     zephyrTX.TM();
 
-    log_nominal(log_array);
-
+    //log_nominal(log_array);
+    MCB_TM_buffer_idx = 0;
     if (!WriteFileTM("MCB")) {
         log_error("Unable to write MCB TM to SD file");
     }
@@ -299,7 +419,7 @@ void StratoPIB::SendPIBEEPROM()
 
 void StratoPIB::SendTSENTM()
 {
-    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u, %0.4f, %0.4f, %0.1f", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat,zephyrRX.zephyr_gps.latitude,zephyrRX.zephyr_gps.longitude,zephyrRX.zephyr_gps.altitude)) {
         zephyrTX.setStateDetails(1, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {
@@ -319,7 +439,7 @@ void StratoPIB::SendTSENTM()
 
 void StratoPIB::SendProfileTM(uint8_t packet_num)
 {
-    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU Profile Record %u: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u", packet_num, pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat)) {
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_status.time, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
         zephyrTX.setStateDetails(1, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {
@@ -337,14 +457,15 @@ void StratoPIB::SendProfileTM(uint8_t packet_num)
     log_nominal(log_array);
 }
 
-// every 10 minutes, aligned with the hour (called in InstrumentLoop)
+// every 15 minutes, aligned with the hour (called in InstrumentLoop)
 void StratoPIB::CheckTSEN()
 {
     static time_t last_tsen = 0;
 
-    // check if it's been at least 9 minutes and the current minute is a multiple of 10
-    if ((now() > last_tsen + 540) && (0 == minute() % 10)) {
+    // check if it's been at least 15 minutes and the current minute is a multiple of 15
+    if ((now() > last_tsen + 840) && (0 == minute() % 15)) {
         last_tsen = now();
+        ReadAnalog();
         SetAction(COMMAND_SEND_TSEN);
     }
 }
@@ -363,10 +484,27 @@ void StratoPIB::PUUndock()
 
 void StratoPIB::PUStartProfile()
 {
+    // Save the starting lat/lon/alt to include in the profile TMs
+    profile_start_latitude = zephyrRX.zephyr_gps.latitude;
+    profile_start_longitude = zephyrRX.zephyr_gps.longitude;
+    profile_start_altitude = zephyrRX.zephyr_gps.altitude;
+    
     int32_t t_down = 60 * (deploy_length / pibConfigs.deploy_velocity.Read()) + pibConfigs.preprofile_time.Read();
     int32_t t_up = 60 * (retract_length / pibConfigs.retract_velocity.Read() + dock_length / pibConfigs.dock_velocity.Read())
                    + pibConfigs.motion_timeout.Read(); // extra time for dock delay
 
     puComm.TX_Profile(t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
-                      pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read());
+                      pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
+    Serial.printf("Profile Params Sent to PU: %d, %d, %d, %d,%d, %d, %d, %d, %d\n",t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
+                      pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
+    pibConfigs.profile_id.Write(pibConfigs.profile_id.Read()+1); //increment the profile counter
+}
+
+void StratoPIB::ReadAnalog()
+{
+    PU_Ir_mon = analogRead(IMON_PU) * (3.000/4095.0)*5000.0; //12 bit, 3V ref, 0.2 Ohm curent shunt to mA
+    PU_Ibts_mon = analogRead(IMON_PU_BTS) * (3.000/4095.0); //just return current proportional voltage from BTS
+    Vmon_input = analogRead(VMON_15V) * (3.000/4095.0)* (1.13 + 10)/1.13; // 1.13K/10K v divider
+    Vmon_3v3 = analogRead(VMON_3V3) * (3.000/4095.0) *2.0 ; // 10k/10k v divider
+    MonDo_I_mon = ((1.65-(3.0 * float(analogRead(IMON_MONDO)) /4096.0))/.044); //MonDo input current monitor ACS&1240LLCBTR-030B3
 }
