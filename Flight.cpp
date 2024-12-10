@@ -216,8 +216,8 @@ void StratoPIB::AutonomousFlight()
 {
     switch (inst_substate) {
     case FLA_IDLE:
-        // reset profile schedule
-        if (zephyrRX.zephyr_gps.solar_zenith_angle < 45) {
+        // reset profile schedule for test, set this to 80, reset to 45 for flight
+        if (zephyrRX.zephyr_gps.solar_zenith_angle < 80) {
             profiles_remaining = pibConfigs.num_profiles.Read();
             profiles_scheduled = false;
         }
