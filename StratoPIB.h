@@ -3,6 +3,8 @@
  *  Author:  Alex St. Clair
  *  Created: July 2019
  *
+ *  Major update: Decemvber 2024 for T4.1, and MonDo Rev E
+ * 
  *  This file declares an Arduino library (C++ class) that inherits
  *  from the StratoCore class. It serves as the overarching class
  *  for the RACHuTS Profiler Interface Board, or PIB.
@@ -31,6 +33,13 @@
 
 #define MCB_BUFFER_SIZE     MAX_MCB_BINARY
 #define PU_BUFFER_SIZE      8192
+
+//LoRa Settings
+#define FREQUENCY 868E6
+#define BANDWIDTH 250E3
+#define SF 9
+#define RF_POWER 19
+#define LORA_TM_TIMEOUT 600
 
 // todo: update naming to be more unique (ie. ACT_ prefix)
 enum ScheduleAction_t : uint8_t {
@@ -112,6 +121,8 @@ public:
     // called in each main loop
     void RunMCBRouter();
     void RunPURouter();
+    void LoRaRX();
+    void LoRaInit();
 
 private:
     // internal serial interface objects for the MCB and PU
@@ -205,6 +216,9 @@ private:
     // PU start profile command generation and transmit
     void PUStartProfile();
 
+    // Read the analog channels on the PIB
+    void ReadAnalog();
+
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
     // track the flight mode (autonomous/manual)
@@ -217,6 +231,8 @@ private:
     uint32_t max_profile_seconds = 0;
     bool mcb_reeling_in = false;
     uint16_t mcb_tm_counter = 0;
+    float reel_pos = 0.0;
+
 
     // flags for PU state tracking
     bool record_received = false;
@@ -234,6 +250,11 @@ private:
     // uint32_t start time of the current profile in millis
     uint32_t profile_start = 0;
 
+    // variables to hold start lat/lon/alt of each profile
+    float profile_start_latitude = 0.0;
+    float profile_start_longitude = 0.0;
+    float profile_start_altitude = 0.0;
+
     // tracks the current type of motion
     MCBMotion_t mcb_motion = NO_MOTION;
 
@@ -247,11 +268,31 @@ private:
 
     // array of error values for MCB motion fault
     uint16_t motion_fault[8] = {0};
+    uint8_t MCB_TM_buffer[8192] = {0};
+    uint16_t MCB_TM_buffer_idx = 0;
 
     // PU status information
     PUStatus_t pu_status = {0};
 
     uint8_t eeprom_buffer[256];
+
+    //Variables for LoRa TMs and Status strings
+    bool Send_LoRa_TM = true;
+    bool Send_LoRa_status = true;
+    char LoRa_RX_buffer[256] = {0};
+    char LoRa_PU_status[256] = {0};
+    
+    uint8_t LoRa_TM_buffer[8192] = {0};
+    uint16_t LoRa_TM_buffer_idx = 0;
+    uint16_t pu_tm_counter = 0;
+    long LoRa_rx_time = 0;
+
+    //variables for PIB house keeping values
+    float PU_Ir_mon = 0.0;
+    float PU_Ibts_mon = 0.0;
+    float Vmon_input = 0.0;
+    float Vmon_3v3 = 0.0;
+    float MonDo_I_mon = 0.0;
 };
 
 #endif /* STRATOPIB_H */
