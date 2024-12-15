@@ -155,7 +155,7 @@ private:
     bool Flight_DockedProfile(bool restart_state);
 
     // Telcommand handler - returns ack/nak
-    void TCHandler(Telecommand_t telecommand);
+    bool TCHandler(Telecommand_t telecommand);
 
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);
