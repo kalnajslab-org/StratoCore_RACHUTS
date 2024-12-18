@@ -18,7 +18,7 @@ void onReceive(int Size)
     PacketSize = Size;
 }
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 StratoRatchuts::StratoRatchuts()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT, &DEBUG_SERIAL)

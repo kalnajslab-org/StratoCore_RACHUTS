@@ -4,7 +4,7 @@
  *  Created: October 2019
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum TSENStates_t {
     ST_ENTRY,
@@ -17,7 +17,7 @@ enum TSENStates_t {
 static TSENStates_t tsen_state = ST_ENTRY;
 static bool resend_attempted = false;
 
-bool StratoPIB::Flight_TSEN(bool restart_state)
+bool StratoRatchuts::Flight_TSEN(bool restart_state)
 {
     // TSEN is overrideable in manual mode if a command is received, or autonomous if it's profile time
     if (!autonomous_mode && CheckAction(ACTION_OVERRIDE_TSEN)) {

@@ -6,9 +6,9 @@
  *  This file implements the RACHuTS Profiling Unit message router and handlers.
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
-void StratoPIB::RunPURouter()
+void StratoRatchuts::RunPURouter()
 {
     SerialMessage_t rx_msg = puComm.RX();
 
@@ -30,7 +30,7 @@ void StratoPIB::RunPURouter()
     }
 }
 
-void StratoPIB::HandlePUASCII()
+void StratoRatchuts::HandlePUASCII()
 {
     switch (puComm.ascii_rx.msg_id) {
     case PU_STATUS:
@@ -54,7 +54,7 @@ void StratoPIB::HandlePUASCII()
     }
 }
 
-void StratoPIB::HandlePUAck()
+void StratoRatchuts::HandlePUAck()
 {
     switch (puComm.ack_id) {
     case PU_GO_WARMUP:
@@ -78,7 +78,7 @@ void StratoPIB::HandlePUAck()
     }
 }
 
-void StratoPIB::HandlePUBin()
+void StratoRatchuts::HandlePUBin()
 {
     // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
     switch (puComm.binary_rx.bin_id) {
@@ -118,7 +118,7 @@ void StratoPIB::HandlePUBin()
     }
 }
 
-void StratoPIB::HandlePUString()
+void StratoRatchuts::HandlePUString()
 {
     switch (puComm.string_rx.str_id) {
     case PU_ERROR:

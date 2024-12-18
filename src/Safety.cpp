@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS safety mode.
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum SAStates_t : uint8_t {
     SA_ENTRY = MODE_ENTRY,
@@ -29,7 +29,7 @@ enum SAStates_t : uint8_t {
     SA_EXIT = MODE_EXIT
 };
 
-void StratoPIB::SafetyMode()
+void StratoRatchuts::SafetyMode()
 {
     switch (inst_substate) {
     case SA_ENTRY:

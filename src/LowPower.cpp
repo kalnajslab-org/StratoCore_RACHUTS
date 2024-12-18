@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS low power mode.
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum LPStates_t : uint8_t {
     LP_ENTRY = MODE_ENTRY,
@@ -21,7 +21,7 @@ enum LPStates_t : uint8_t {
     LP_EXIT = MODE_EXIT
 };
 
-void StratoPIB::LowPowerMode()
+void StratoRatchuts::LowPowerMode()
 {
     switch (inst_substate) {
     case LP_ENTRY:

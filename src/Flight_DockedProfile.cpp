@@ -4,7 +4,7 @@
  *  Created: June 2020
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum ProfileStates_t {
     ST_ENTRY,
@@ -21,7 +21,7 @@ enum ProfileStates_t {
 static ProfileStates_t profile_state = ST_ENTRY;
 static bool resend_attempted = false;
 
-bool StratoPIB::Flight_DockedProfile(bool restart_state)
+bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
 {
     if (restart_state) profile_state = ST_ENTRY;
 

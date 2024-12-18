@@ -4,7 +4,7 @@
  *  Created: October 2019
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum PUOffloadStates_t {
     ST_ENTRY,
@@ -19,7 +19,7 @@ static PUOffloadStates_t puoffload_state = ST_ENTRY;
 static bool resend_attempted = false;
 static uint8_t packet_num = 0;
 
-bool StratoPIB::Flight_PUOffload(bool restart_state)
+bool StratoRatchuts::Flight_PUOffload(bool restart_state)
 {
     if (restart_state) puoffload_state = ST_ENTRY;
 

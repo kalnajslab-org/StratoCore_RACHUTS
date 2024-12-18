@@ -4,7 +4,7 @@
  *  Created: October 2019
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum ManualMotionStates_t {
     ST_ENTRY,
@@ -19,7 +19,7 @@ enum ManualMotionStates_t {
 static ManualMotionStates_t manualmotion_state = ST_ENTRY;
 static bool resend_attempted = false;
 
-bool StratoPIB::Flight_ManualMotion(bool restart_state)
+bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
 {
     if (restart_state) manualmotion_state = ST_ENTRY;
 

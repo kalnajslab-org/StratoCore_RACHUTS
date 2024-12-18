@@ -6,10 +6,10 @@
  *  This file implements the RACHuTS Telecommand handler.
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 // The telecommand handler must return ACK/NAK
-void StratoPIB::TCHandler(Telecommand_t telecommand)
+void StratoRatchuts::TCHandler(Telecommand_t telecommand)
 {
     String dbg_msg = "";
     log_debug("Received telecommand");

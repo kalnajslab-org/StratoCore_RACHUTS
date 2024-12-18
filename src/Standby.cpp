@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS standby mode.
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum SBStates_t : uint8_t {
     SB_ENTRY = MODE_ENTRY,
@@ -19,7 +19,7 @@ enum SBStates_t : uint8_t {
     SB_EXIT = MODE_EXIT
 };
 
-void StratoPIB::StandbyMode()
+void StratoRatchuts::StandbyMode()
 {
     switch (inst_substate) {
     case SB_ENTRY:

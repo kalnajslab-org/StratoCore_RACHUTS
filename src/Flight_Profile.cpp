@@ -4,7 +4,7 @@
  *  Created: October 2019
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 enum ProfileStates_t {
     ST_ENTRY,
@@ -36,7 +36,7 @@ static ProfileStates_t profile_state = ST_ENTRY;
 static bool resend_attempted = false;
 static uint8_t redock_count = 0;
 
-bool StratoPIB::Flight_Profile(bool restart_state)
+bool StratoRatchuts::Flight_Profile(bool restart_state)
 {
     if (restart_state) profile_state = ST_ENTRY;
 

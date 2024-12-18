@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS flight mode.
  */
 
-#include "StratoPIB.h"
+#include "StratoRatchuts.h"
 
 // Flight mode states, FLA = autonomous, FLM = manual, FL = general
 enum FLStates_t : uint8_t {
@@ -49,7 +49,7 @@ enum FLStates_t : uint8_t {
 //  * on each loop, whichever substate is set will be perfomed
 //  * when the mode is changed by the Zephyr, FL_EXIT will automatically be set
 //  * it is up to the FL_EXIT logic perform any actions for leaving flight mode
-void StratoPIB::FlightMode()
+void StratoRatchuts::FlightMode()
 {
     // todo: draw out flight mode state machine
     switch (inst_substate) {
@@ -111,7 +111,7 @@ void StratoPIB::FlightMode()
     }
 }
 
-void StratoPIB::ManualFlight()
+void StratoRatchuts::ManualFlight()
 {
     switch (inst_substate) {
     case FLM_IDLE:
@@ -212,7 +212,7 @@ void StratoPIB::ManualFlight()
     };
 }
 
-void StratoPIB::AutonomousFlight()
+void StratoRatchuts::AutonomousFlight()
 {
     switch (inst_substate) {
     case FLA_IDLE:
