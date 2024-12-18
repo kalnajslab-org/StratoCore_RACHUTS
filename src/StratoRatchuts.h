@@ -10,8 +10,8 @@
  *  for the RACHuTS Profiler Interface Board, or PIB.
  */
 
-#ifndef STRATOPIB_H
-#define STRATOPIB_H
+#ifndef STRATORATCHUTS_H
+#define STRATORATCHUTS_H
 
 #include "StratoCore.h"
 #include "PIBHardware.h"
@@ -107,10 +107,10 @@ struct PUStatus_t {
     uint8_t heater_stat;
 };
 
-class StratoPIB : public StratoCore {
+class StratoRatchuts : public StratoCore {
 public:
-    StratoPIB();
-    ~StratoPIB() { };
+    StratoRatchuts();
+    ~StratoRatchuts() { };
 
     // called before the main loop begins
     void InstrumentSetup();
@@ -295,4 +295,4 @@ private:
     float MonDo_I_mon = 0.0;
 };
 
-#endif /* STRATOPIB_H */
+#endif /* STRATORATCHUTS_H */

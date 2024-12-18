@@ -19,7 +19,7 @@ enum EFStates_t : uint8_t {
     EF_EXIT = MODE_EXIT
 };
 
-void StratoPIB::EndOfFlightMode()
+void StratoRatchuts::EndOfFlightMode()
 {
     switch (inst_substate) {
     case EF_ENTRY:

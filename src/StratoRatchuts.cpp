@@ -1,5 +1,5 @@
 /*
- *  StratoPIB.cpp
+ *  StratoRatchuts.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
  *  Updated for MonDo board: November 2020 (LEK)
@@ -20,7 +20,7 @@ void onReceive(int Size)
 
 #include "StratoPIB.h"
 
-StratoPIB::StratoPIB()
+StratoRatchuts::StratoRatchuts()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT, &DEBUG_SERIAL)
     , mcbComm(&MCB_SERIAL)
     , puComm(&PU_SERIAL)
@@ -32,7 +32,7 @@ StratoPIB::StratoPIB()
 // --------------------------------------------------------
 
 // note serial setup occurs in main arduino file
-void StratoPIB::InstrumentSetup()
+void StratoRatchuts::InstrumentSetup()
 {
 
     // safe pin required by Zephyr
@@ -69,14 +69,14 @@ void StratoPIB::InstrumentSetup()
     puComm.AssignBinaryRXBuffer(binary_pu, PU_BUFFER_SIZE);
 }
 
-void StratoPIB::InstrumentLoop()
+void StratoRatchuts::InstrumentLoop()
 {
     WatchFlags();
     CheckTSEN();
     LoRaRX();
 }
 
-void StratoPIB::LoRaInit()
+void StratoRatchuts::LoRaInit()
 {
    if (!LoRa.begin(FREQUENCY)){
        ZephyrLogWarn("Starting LoRa failed!");
@@ -90,7 +90,7 @@ void StratoPIB::LoRaInit()
     LoRa.setTxPower(RF_POWER);
 }
 
-void StratoPIB::LoRaRX()
+void StratoRatchuts::LoRaRX()
 {
     int i = 0;
 
@@ -174,7 +174,7 @@ void StratoPIB::LoRaRX()
 // Action handler and action flag helper functions
 // --------------------------------------------------------
 
-void StratoPIB::ActionHandler(uint8_t action)
+void StratoRatchuts::ActionHandler(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
     if (action >= NUM_ACTIONS) {
@@ -187,7 +187,7 @@ void StratoPIB::ActionHandler(uint8_t action)
     action_flags[action].stale_count = 0;
 }
 
-bool StratoPIB::CheckAction(uint8_t action)
+bool StratoRatchuts::CheckAction(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
     if (action >= NUM_ACTIONS) {
@@ -205,13 +205,13 @@ bool StratoPIB::CheckAction(uint8_t action)
     }
 }
 
-void StratoPIB::SetAction(uint8_t action)
+void StratoRatchuts::SetAction(uint8_t action)
 {
     action_flags[action].flag_value = true;
     action_flags[action].stale_count = 0;
 }
 
-void StratoPIB::WatchFlags()
+void StratoRatchuts::WatchFlags()
 {
     // monitor for and clear stale flags
     for (int i = 0; i < NUM_ACTIONS; i++) {
@@ -229,7 +229,7 @@ void StratoPIB::WatchFlags()
 // Profile helpers
 // --------------------------------------------------------
 
-bool StratoPIB::StartMCBMotion()
+bool StratoRatchuts::StartMCBMotion()
 {
     bool success = false;
 
@@ -270,7 +270,7 @@ bool StratoPIB::StartMCBMotion()
     return success;
 }
 
-bool StratoPIB::ScheduleProfiles()
+bool StratoRatchuts::ScheduleProfiles()
 {
     // no matter the trigger, reset the time_trigger to the max value, new TC needed to set new value
     pibConfigs.time_trigger.Write(UINT32_MAX);
@@ -290,7 +290,7 @@ bool StratoPIB::ScheduleProfiles()
     return true;
 }
 
-void StratoPIB::AddMCBTM()
+void StratoRatchuts::AddMCBTM()
 {
     // make sure it's the correct size
     if (mcbComm.binary_rx.bin_length != MOTION_TM_SIZE) {
@@ -328,7 +328,7 @@ void StratoPIB::AddMCBTM()
     }
 }
 
-void StratoPIB::NoteProfileStart()
+void StratoRatchuts::NoteProfileStart()
 {
     mcb_motion_ongoing = true;
     profile_start = millis();
@@ -351,7 +351,7 @@ void StratoPIB::NoteProfileStart()
 
 }
 
-void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
+void StratoRatchuts::SendMCBTM(StateFlag_t state_flag, const char * message)
 {
     // use only the first flag to report the motion
     zephyrTX.addTm(MCB_TM_buffer,MCB_TM_buffer_idx);
@@ -371,7 +371,7 @@ void StratoPIB::SendMCBTM(StateFlag_t state_flag, const char * message)
 }
 
 
-void StratoPIB::SendMCBEEPROM()
+void StratoRatchuts::SendMCBEEPROM()
 {
     // the binary buffer has been prepared by the MCBRouter
     zephyrTX.clearTm();
@@ -390,7 +390,7 @@ void StratoPIB::SendMCBEEPROM()
     log_nominal("Sent MCB EEPROM as TM");
 }
 
-void StratoPIB::SendPIBEEPROM()
+void StratoRatchuts::SendPIBEEPROM()
 {
     // create a buffer from the EEPROM (cheat, and use the preallocated MCBComm Binary RX buffer)
     mcbComm.binary_rx.bin_length = pibConfigs.Bufferize(mcbComm.binary_rx.bin_buffer, MAX_MCB_BINARY);
@@ -417,7 +417,7 @@ void StratoPIB::SendPIBEEPROM()
     log_nominal("Sent PIB EEPROM as TM");
 }
 
-void StratoPIB::SendTSENTM()
+void StratoRatchuts::SendTSENTM()
 {
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u, %0.4f, %0.4f, %0.1f", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat,zephyrRX.zephyr_gps.latitude,zephyrRX.zephyr_gps.longitude,zephyrRX.zephyr_gps.altitude)) {
         zephyrTX.setStateDetails(1, log_array);
@@ -437,7 +437,7 @@ void StratoPIB::SendTSENTM()
     log_nominal(log_array);
 }
 
-void StratoPIB::SendProfileTM(uint8_t packet_num)
+void StratoRatchuts::SendProfileTM(uint8_t packet_num)
 {
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_status.time, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
         zephyrTX.setStateDetails(1, log_array);
@@ -458,7 +458,7 @@ void StratoPIB::SendProfileTM(uint8_t packet_num)
 }
 
 // every 15 minutes, aligned with the hour (called in InstrumentLoop)
-void StratoPIB::CheckTSEN()
+void StratoRatchuts::CheckTSEN()
 {
     static time_t last_tsen = 0;
 
@@ -470,19 +470,19 @@ void StratoPIB::CheckTSEN()
     }
 }
 
-void StratoPIB::PUDock()
+void StratoRatchuts::PUDock()
 {
     pibConfigs.pu_docked.Write(true);
     digitalWrite(PU_PWR_ENABLE, HIGH);
 }
 
-void StratoPIB::PUUndock()
+void StratoRatchuts::PUUndock()
 {
     pibConfigs.pu_docked.Write(false);
     digitalWrite(PU_PWR_ENABLE, LOW);
 }
 
-void StratoPIB::PUStartProfile()
+void StratoRatchuts::PUStartProfile()
 {
     // Save the starting lat/lon/alt to include in the profile TMs
     profile_start_latitude = zephyrRX.zephyr_gps.latitude;
@@ -500,7 +500,7 @@ void StratoPIB::PUStartProfile()
     pibConfigs.profile_id.Write(pibConfigs.profile_id.Read()+1); //increment the profile counter
 }
 
-void StratoPIB::ReadAnalog()
+void StratoRatchuts::ReadAnalog()
 {
     PU_Ir_mon = analogRead(IMON_PU) * (3.000/4095.0)*5000.0; //12 bit, 3V ref, 0.2 Ohm curent shunt to mA
     PU_Ibts_mon = analogRead(IMON_PU_BTS) * (3.000/4095.0); //just return current proportional voltage from BTS

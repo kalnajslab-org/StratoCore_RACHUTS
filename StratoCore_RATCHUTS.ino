@@ -7,12 +7,12 @@
  *  LASP Strateole Zephyr interface boards.
  */
 
-#include "src/StratoPIB.h"
+#include "src/StratoRatchuts.h"
 #include <TimerOne.h>
 
 #define LOOP_TENTHS     10 // defines loop period in 0.1s
 
-StratoPIB pib;
+StratoRatchuts pib;
 
 // timer control variables
 volatile uint8_t timer_counter = 0;
