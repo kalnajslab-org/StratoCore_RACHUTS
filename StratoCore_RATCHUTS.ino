@@ -13,6 +13,12 @@
 #define LOOP_TENTHS     10 // defines loop period in 0.1s
 
 StratoRatchuts pib;
+uint8_t Zephyr_serial_TX_buffer[ZEPHYR_SERIAL_BUFFER_SIZE];
+uint8_t Zephyr_serial_RX_buffer[ZEPHYR_SERIAL_BUFFER_SIZE];
+uint8_t mcb_serial_TX_buffer[MCB_SERIAL_BUFFER_SIZE];
+uint8_t mcb_serial_RX_buffer[MCB_SERIAL_BUFFER_SIZE];
+uint8_t pu_serial_TX_buffer[PU_SERIAL_BUFFER_SIZE];
+uint8_t pu_serial_RX_buffer[PU_SERIAL_BUFFER_SIZE];
 
 // timer control variables
 volatile uint8_t timer_counter = 0;
@@ -40,6 +46,15 @@ void setup()
   ZEPHYR_SERIAL.begin(115200);
   MCB_SERIAL.begin(115200);
   PU_SERIAL.begin(115200);
+
+  //Increase serial buffer sizes for Teensy 4.1
+  ZEPHYR_SERIAL.addMemoryForRead(&Zephyr_serial_RX_buffer, sizeof(Zephyr_serial_RX_buffer));
+  ZEPHYR_SERIAL.addMemoryForWrite(&Zephyr_serial_TX_buffer, sizeof(Zephyr_serial_TX_buffer));
+  MCB_SERIAL.addMemoryForRead(&mcb_serial_RX_buffer, sizeof(mcb_serial_RX_buffer));
+  MCB_SERIAL.addMemoryForWrite(&mcb_serial_TX_buffer, sizeof(mcb_serial_TX_buffer));
+  PU_SERIAL.addMemoryForRead(&pu_serial_RX_buffer, sizeof(pu_serial_RX_buffer));
+  PU_SERIAL.addMemoryForWrite(&pu_serial_TX_buffer, sizeof(pu_serial_TX_buffer));
+
 
   // Timer interrupt setup for main loop timing
   Timer1.initialize(100000); // 0.1 s

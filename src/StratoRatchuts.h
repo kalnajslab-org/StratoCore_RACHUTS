@@ -15,12 +15,15 @@
 
 #include "StratoCore.h"
 #include "PIBHardware.h"
-#include "PIBBufferGuard.h"
+//#include "PIBBufferGuard.h" //this is not needed for Teensy 4.1 as buffer size is set in user code
 #include "PIBConfigs.h"
 #include "MCBComm.h"
 #include "PUComm.h"
 
-#define INSTRUMENT      RACHUTS
+#define INSTRUMENT   RACHUTS
+#define ZEPHYR_SERIAL_BUFFER_SIZE 4096
+#define MCB_SERIAL_BUFFER_SIZE    4096
+#define PU_SERIAL_BUFFER_SIZE     4096
 
 // number of loops before a flag becomes stale and is reset
 #define FLAG_STALE      3
