@@ -9,7 +9,7 @@
 #include "StratoRatchuts.h"
 
 // The telecommand handler must return ACK/NAK
-void StratoRatchuts::TCHandler(Telecommand_t telecommand)
+bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 {
     String dbg_msg = "";
     log_debug("Received telecommand");

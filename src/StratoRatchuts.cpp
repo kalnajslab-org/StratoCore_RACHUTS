@@ -51,7 +51,7 @@ void StratoRatchuts::InstrumentSetup()
     // Set up the second SPI Port for the LoRa Module
     SPI1.setSCK(LORA_SCK);
     SPI1.setMISO(LORA_MISO);
-    SPI1.setMOSI(LORA_MOSI));
+    SPI1.setMOSI(LORA_MOSI);
 
     LoRa.setSPI(SPI1);
     LoRa.setPins(SS_PIN, RESET_PIN,INTERUPT_PIN);

@@ -19,6 +19,7 @@
 #include "PIBConfigs.h"
 #include "MCBComm.h"
 #include "PUComm.h"
+#include "LoRa.h"
 
 #define INSTRUMENT   RACHUTS
 #define ZEPHYR_SERIAL_BUFFER_SIZE 4096

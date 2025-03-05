@@ -80,6 +80,14 @@ public:
     // MCB TM mode
     EEPROMData<bool> real_time_mcb;
 
+    // LoRa Settings
+    EEPROMData<bool> lora_tx_tm;
+    EEPROMData<uint16_t> lora_tx_status;
+    
+    EEPROMData<uint16_t> profile_id;
+    EEPROMData<bool> ra_override;
+    EEPROMData<bool> pu_auto_offload;
+
     // ----------------------------------------------------
 
 };
