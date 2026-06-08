@@ -42,41 +42,6 @@ bool StratoRatchuts::Flight_TSEN(bool restart_state)
         }
         break;
 
-    case ST_REQUEST_TSEN:
-        puComm.TX_ASCII(PU_SEND_TSEN_RECORD);
-        scheduler.AddAction(RESEND_PU_TSEN, PU_RESEND_TIMEOUT);
-        tsen_received = false;
-        pu_no_more_records = false;
-        tsen_state = ST_WAIT_TSEN;
-        break;
-
-    case ST_WAIT_TSEN:
-        if (tsen_received) { // ACK/NAK in PURouter
-            tsen_received = false;
-            snprintf(log_array, LOG_ARRAY_SIZE, "Received TSEN: %u", puComm.binary_rx.bin_length);
-            log_nominal(log_array);
-            SendTSENTM();
-            tsen_state = ST_TM_ACK;
-            scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
-            break;
-        } else if (pu_no_more_records) {
-            pu_no_more_records = false;
-            log_nominal("No more TSEN records");
-            return true;
-        }
-
-        if (CheckAction(RESEND_PU_TSEN)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                tsen_state = ST_REQUEST_TSEN;
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("PU not successful in sending TSEN");
-                return true;
-            }
-        }
-        break;
-
     case ST_TM_ACK:
         if (ACK == TM_ack_flag) {
             tsen_state = ST_ENTRY;

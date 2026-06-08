@@ -77,37 +77,6 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         resend_attempted = false;
         break;
 
-    case ST_SET_PU_WARMUP:
-        pu_warmup = false;
-        puComm.TX_WarmUp(pibConfigs.flash_temp.Read(),pibConfigs.heater1_temp.Read(),pibConfigs.heater2_temp.Read(),
-                         pibConfigs.flash_power.Read(),pibConfigs.tsen_power.Read());
-        scheduler.AddAction(RESEND_PU_WARMUP, PU_RESEND_TIMEOUT);
-        profile_state = ST_CONFIRM_PU_WARMUP;
-        break;
-
-    case ST_CONFIRM_PU_WARMUP:
-        if (pu_warmup) {
-            profile_state = ST_WARMUP;
-            scheduler.AddAction(ACTION_END_WARMUP, pibConfigs.puwarmup_time.Read());
-        } else if (CheckAction(RESEND_PU_WARMUP)) {
-            if (!resend_attempted) {
-                resend_attempted = true;
-                profile_state = ST_SET_PU_WARMUP;
-            } else {
-                resend_attempted = false;
-                ZephyrLogWarn("PU not responding to warmup command");
-                return true;
-            }
-        }
-        break;
-
-    case ST_WARMUP:
-        if (CheckAction(ACTION_END_WARMUP)) {
-            Flight_TSEN(true);
-            profile_state = ST_GET_TSEN;
-        }
-        break;
-
     case ST_GET_TSEN:
         if (Flight_TSEN(false)) {
             profile_state = ST_SET_PU_PROFILE;

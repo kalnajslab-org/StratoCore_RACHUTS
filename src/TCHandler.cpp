@@ -336,7 +336,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogFine(log_array);
         break;
     case PURESET:
-        puComm.TX_ASCII(PU_RESET);
+        puComm.TX_ASCII(RPU_RESET);
         break;
     case PUDOCKEDCONFIGS:
         pibConfigs.docked_rate.Write(puParam.dockedRate);

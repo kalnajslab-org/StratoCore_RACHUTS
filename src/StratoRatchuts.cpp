@@ -92,6 +92,34 @@ void StratoRatchuts::LoRaInit()
 
 void StratoRatchuts::LoRaRX()
 {
+    if (PacketSize > 0) {
+        PacketSize = 0;
+        Serial.print("LoRa pkt RSSI:");
+        Serial.println(LoRa.packetRssi());
+
+        int BytesToRead = LoRa.available();
+        for (int i = 0; i < BytesToRead; i++)
+            LoRa_RX_buffer[i] = LoRa.read();
+
+        RPUPacket rpu_packet;
+        if (rpu_packet.decode((const uint8_t*)LoRa_RX_buffer, BytesToRead))
+        {
+            String json_str = rpu_packet.toJSON();
+            for (size_t i = 0; i < json_str.length(); i++) {
+                Serial.write(json_str[i]);
+                if (json_str[i] == ',') Serial.println();
+            }
+            Serial.println();
+
+            SendRPUStatusTM(json_str);
+        }
+        else
+        {
+            Serial.println("Failed to decode RPUPacket");
+        }
+    }
+    return;
+
     int i = 0;
 
     if (PacketSize > 0) //if LoRa data is available
@@ -104,9 +132,9 @@ void StratoRatchuts::LoRaRX()
         for (i = 0; i <  BytesToRead; i++)
            LoRa_RX_buffer[i] = LoRa.read();
         
-        //for (i = 0; i< BytesToRead; i++ ) //for debug write buffer to consols
-        //    Serial.write(LoRa_RX_buffer[i]);
-        //Serial.println();
+        for (i = 0; i< BytesToRead; i++ ) //for debug write buffer to consols
+            Serial.write(LoRa_RX_buffer[i]);
+        Serial.println();
 
         if (strncmp(LoRa_RX_buffer,"ST",2) == 0)//it is a status packet
         { 
@@ -168,6 +196,22 @@ void StratoRatchuts::LoRaRX()
                     pu_tm_counter = 0; //reset the TM counter
         }
     }
+}
+
+// Send the decoded RPU status (as JSON) to the ground as an RPUSTATUS TM
+void StratoRatchuts::SendRPUStatusTM(const String& json)
+{
+    zephyrTX.clearTm();
+
+    zephyrTX.setStateDetails(1, "RPUSTATUS");
+    zephyrTX.setStateFlagValue(1, FINE);
+    zephyrTX.setStateFlagValue(2, NOMESS);
+    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    zephyrTX.addTm((const uint8_t*)json.c_str(), json.length());
+
+    zephyrTX.TM();
+    zephyrTX.clearTm();
 }
 
 // --------------------------------------------------------
@@ -493,8 +537,8 @@ void StratoRatchuts::PUStartProfile()
     int32_t t_up = 60 * (retract_length / pibConfigs.retract_velocity.Read() + dock_length / pibConfigs.dock_velocity.Read())
                    + pibConfigs.motion_timeout.Read(); // extra time for dock delay
 
-    puComm.TX_Profile(t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
-                      pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
+    //puComm.TX_Profile(t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
+    //                pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
     Serial.printf("Profile Params Sent to PU: %d, %d, %d, %d,%d, %d, %d, %d, %d\n",t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
                       pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
     pibConfigs.profile_id.Write(pibConfigs.profile_id.Read()+1); //increment the profile counter

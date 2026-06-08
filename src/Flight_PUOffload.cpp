@@ -42,7 +42,7 @@ bool StratoRatchuts::Flight_PUOffload(bool restart_state)
         break;
 
     case ST_REQUEST_PACKET:
-        puComm.TX_ASCII(PU_SEND_PROFILE_RECORD);
+        puComm.TX_ASCII(RPU_SEND_RECORDS);
         scheduler.AddAction(RESEND_PU_RECORD, PU_RESEND_TIMEOUT);
         record_received = false;
         pu_no_more_records = false;

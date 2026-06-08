@@ -33,7 +33,7 @@ void StratoRatchuts::RunPURouter()
 void StratoRatchuts::HandlePUASCII()
 {
     switch (puComm.ascii_rx.msg_id) {
-    case PU_STATUS:
+    case RPU_STATUS:
         if (!puComm.ascii_rx.checksum_valid || !puComm.RX_Status(&pu_status.time, &pu_status.v_battery, &pu_status.i_charge, &pu_status.therm1, &pu_status.therm2, &pu_status.heater_stat)) {
             pu_status.time = 0;
             pu_status.v_battery = 0.0f;
@@ -45,7 +45,7 @@ void StratoRatchuts::HandlePUASCII()
             pu_status.last_status = now();
         }
         break;
-    case PU_NO_MORE_RECORDS:
+    case RPU_NO_MORE_RECORDS:
         pu_no_more_records = true;
         break;
     default:
@@ -57,23 +57,19 @@ void StratoRatchuts::HandlePUASCII()
 void StratoRatchuts::HandlePUAck()
 {
     switch (puComm.ack_id) {
-    case PU_GO_WARMUP:
-        log_nominal("PU in warmup");
+    case RPU_GO_MEASURE:
+        log_nominal("RPU in measure");
         pu_warmup = true;
         break;
-    case PU_GO_PROFILE:
-        log_nominal("PU in profile");
+    case RPU_GO_STANDBY:
+        log_nominal("RPU in standby");
         pu_profile = true;
         break;
-    case PU_GO_PREPROFILE:
-        log_nominal("PU in preprofile");
-        pu_preprofile = true;
-        break;
-    case PU_RESET:
-        ZephyrLogFine("PU acked reset");
+    case RPU_RESET:
+        ZephyrLogFine("RPU acked reset");
         break;
     default:
-        log_error("Unknown PU ack received");
+        log_error("Unknown RPU ack received");
         break;
     }
 }
@@ -82,32 +78,17 @@ void StratoRatchuts::HandlePUBin()
 {
     // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
     switch (puComm.binary_rx.bin_id) {
-    case PU_TSEN_RECORD:
-        // prep the TM buffer
-        zephyrTX.clearTm();
-
-        // see if we can place in the buffer
-        if (puComm.binary_rx.checksum_valid && zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
-            tsen_received = true;
-            puComm.TX_Ack(PU_TSEN_RECORD, true);
-        } else {
-            log_error("TSEN checksum invalid or error adding to TM buffer");
-            puComm.TX_Ack(PU_TSEN_RECORD, false);
-            zephyrTX.clearTm();
-        }
-        break;
-
-    case PU_PROFILE_RECORD:
+    case RPU_PROFILE_RECORD:
         // prep the TM buffer
         zephyrTX.clearTm();
 
         // see if we can place in the buffer
         if (puComm.binary_rx.checksum_valid && zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
             record_received = true;
-            puComm.TX_Ack(PU_TSEN_RECORD, true);
+            puComm.TX_Ack(RPU_PROFILE_RECORD, true);
         } else {
             log_error("Profile record checksum invalid or error adding to TM buffer");
-            puComm.TX_Ack(PU_TSEN_RECORD, false);
+            puComm.TX_Ack(RPU_PROFILE_RECORD, false);
             zephyrTX.clearTm();
         }
         break;
@@ -121,7 +102,7 @@ void StratoRatchuts::HandlePUBin()
 void StratoRatchuts::HandlePUString()
 {
     switch (puComm.string_rx.str_id) {
-    case PU_ERROR:
+    case RPU_ERROR:
         if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
             ZephyrLogCrit(log_array);
             inst_substate = MODE_ERROR;

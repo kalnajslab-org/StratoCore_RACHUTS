@@ -18,7 +18,7 @@
 //#include "PIBBufferGuard.h" //this is not needed for Teensy 4.1 as buffer size is set in user code
 #include "PIBConfigs.h"
 #include "MCBComm.h"
-#include "PUComm.h"
+#include "RPUComm.h"
 #include "LoRa.h"
 
 #define INSTRUMENT   RACHUTS
@@ -127,11 +127,12 @@ public:
     void RunPURouter();
     void LoRaRX();
     void LoRaInit();
+    void SendRPUStatusTM(const String& json);
 
 private:
     // internal serial interface objects for the MCB and PU
     MCBComm mcbComm;
-    PUComm puComm;
+    RPUComm puComm;
 
     // EEPROM interface object
     PIBConfigs pibConfigs;

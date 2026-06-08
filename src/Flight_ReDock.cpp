@@ -93,7 +93,7 @@ bool StratoRatchuts::Flight_ReDock(bool restart_state)
         break;
 
     case ST_CHECK_PU:
-        puComm.TX_ASCII(PU_SEND_STATUS);
+        puComm.TX_ASCII(RPU_SEND_STATUS);
         scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
         redock_state = ST_WAIT_PU;
         break;

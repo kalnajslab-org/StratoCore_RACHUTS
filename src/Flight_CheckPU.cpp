@@ -30,7 +30,7 @@ bool StratoRatchuts::Flight_CheckPU(bool restart_state)
         break;
 
     case ST_SEND_REQUEST:
-        puComm.TX_ASCII(PU_SEND_STATUS);
+        puComm.TX_ASCII(RPU_SEND_STATUS);
         scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
         checkpu_state = ST_WAIT_REQUEST;
         break;
