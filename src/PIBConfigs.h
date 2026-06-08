@@ -25,7 +25,7 @@ public:
     PIBConfigs();
 
     // constants, manually change version number here to force update
-    static const uint16_t CONFIG_VERSION = 0x5C02;
+    static const uint16_t CONFIG_VERSION = 0x5C03;
     static const uint16_t BASE_ADDRESS = 0x0000;
 
     // ------------------ Configurations ------------------
@@ -62,6 +62,13 @@ public:
     EEPROMData<uint8_t> docked_TSEN;
     EEPROMData<uint8_t> docked_ROPC;
     EEPROMData<uint8_t> docked_FLASH;
+
+    // RPU configuration
+    EEPROMData<uint16_t> rpu_meas_period; // in seconds
+    EEPROMData<uint16_t> rpu_status_period; // in seconds
+    EEPROMData<uint8_t> rpu_enable_TSEN;
+    EEPROMData<uint8_t> rpu_enable_ROPC;
+    EEPROMData<uint8_t> rpu_enable_RS41;
 
     // profile timing (seconds)
     EEPROMData<uint16_t> dwell_time;

@@ -1,3 +1,4 @@
 .pio/
 .vscode/
 src/StratoCore_RATCHUTS.cpp
+.DS_Store

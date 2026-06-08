@@ -348,6 +348,23 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogFine(log_array);
         break;
 
+    case RPUGOMEASURE:
+        pibConfigs.rpu_meas_period.Write(rpuParam.measPeriodSecs);
+        pibConfigs.rpu_enable_TSEN.Write(rpuParam.enableTSEN);
+        pibConfigs.rpu_enable_ROPC.Write(rpuParam.enableROPC);
+        pibConfigs.rpu_enable_RS41.Write(rpuParam.enableRS41);
+        snprintf(log_array, LOG_ARRAY_SIZE, "New RPU measurement configs: %u, %u, %u, %u", pibConfigs.rpu_meas_period.Read(),
+                 pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_RS41.Read());
+        ZephyrLogFine(log_array);
+        break;
+
+    case RPUSTATUSPERIOD:
+        pibConfigs.rpu_status_period.Write(rpuParam.statusPeriodSecs);
+        puComm.TX_SetStatusRate(pibConfigs.rpu_status_period.Read());
+        snprintf(log_array, LOG_ARRAY_SIZE, "Set rpu_status_period: %u", pibConfigs.rpu_status_period.Read());
+        ZephyrLogFine(log_array);
+        break;
+
     // General Telecommands -------------------------------
     // note that RESET_INST and GETTMBUFFER are implemented in StratoCore
     case EXITERROR:
@@ -361,4 +378,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogWarn(log_array);
         break;
     }
+
+    return true;
 }

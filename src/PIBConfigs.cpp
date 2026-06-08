@@ -37,6 +37,11 @@ PIBConfigs::PIBConfigs()
     , docked_TSEN(1)
     , docked_ROPC(1)
     , docked_FLASH(1)
+    , rpu_meas_period(60)
+    , rpu_status_period(1800)
+    , rpu_enable_TSEN(1)
+    , rpu_enable_ROPC(1)
+    , rpu_enable_RS41(1)
     , dwell_time(900)
     , preprofile_time(180)
     , puwarmup_time(900)
@@ -83,6 +88,11 @@ void PIBConfigs::RegisterAll()
     success &= Register(&docked_TSEN);
     success &= Register(&docked_ROPC);
     success &= Register(&docked_FLASH);
+    success &= Register(&rpu_meas_period);
+    success &= Register(&rpu_status_period);
+    success &= Register(&rpu_enable_TSEN);
+    success &= Register(&rpu_enable_ROPC);
+    success &= Register(&rpu_enable_RS41);
     success &= Register(&dwell_time);
     success &= Register(&preprofile_time);
     success &= Register(&puwarmup_time);
