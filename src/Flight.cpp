@@ -20,7 +20,6 @@ enum FLStates_t : uint8_t {
     FLM_CHECK_PU,
     FLM_MANUAL_MOTION,
     FLM_REDOCK,
-    FLM_TSEN,
     FLM_PU_OFFLOAD,
     FLM_PROFILE,
     FLM_DOCKED,
@@ -28,7 +27,6 @@ enum FLStates_t : uint8_t {
     // autonomous
     FLA_IDLE,
     FLA_WAIT_PROFILE,
-    FLA_TSEN,
     FLA_PROFILE,
     FLA_PU_OFFLOAD,
     FLA_NOTE_PROFILE_END,
@@ -101,7 +99,8 @@ void StratoRatchuts::FlightMode()
         log_nominal("Exiting FL");
         break;
     default:
-        // we've made it here because we're in a mode-specific state
+        // All FLM_* and FLA_* substates fall here and are dispatched to the
+        // mode-specific inner switch in ManualFlight() or AutonomousFlight().
         if (autonomous_mode) {
             AutonomousFlight();
         } else {
@@ -140,10 +139,6 @@ void StratoRatchuts::ManualFlight()
             mcb_motion = MOTION_IN_NO_LW;
             Flight_ReDock(true);
             inst_substate = FLM_REDOCK;
-        } else if (CheckAction(COMMAND_SEND_TSEN)) {
-            log_nominal("Send TSEN manual command");
-            Flight_TSEN(true);
-            inst_substate = FLM_TSEN;
         } else if (CheckAction(COMMAND_MANUAL_PROFILE)) {
             log_nominal("Profile manual command");
             Flight_Profile(true);
@@ -178,12 +173,6 @@ void StratoRatchuts::ManualFlight()
 
     case FLM_REDOCK:
         if (Flight_ReDock(false)) {
-            inst_substate = FLM_IDLE;
-        }
-        break;
-
-    case FLM_TSEN:
-        if (Flight_TSEN(false)) {
             inst_substate = FLM_IDLE;
         }
         break;
@@ -241,9 +230,6 @@ void StratoRatchuts::AutonomousFlight()
             } else {
                 inst_substate = FL_ERROR_LANDING;
             }
-        } else if (CheckAction(COMMAND_SEND_TSEN)) {
-            Flight_TSEN(true);
-            inst_substate = FLA_TSEN;
         }
         break;
 
@@ -251,15 +237,6 @@ void StratoRatchuts::AutonomousFlight()
         if (CheckAction(ACTION_BEGIN_PROFILE)) {
             Flight_Profile(true);
             inst_substate = FLA_PROFILE;
-        } else if (CheckAction(COMMAND_SEND_TSEN)) {
-            Flight_TSEN(true);
-            inst_substate = FLA_TSEN;
-        }
-        break;
-
-    case FLA_TSEN:
-        if (Flight_TSEN(false)) {
-            inst_substate = FLA_IDLE;
         }
         break;
 

@@ -57,7 +57,6 @@ enum ScheduleAction_t : uint8_t {
     RESEND_MOTION_COMMAND,
     RESEND_TM,
     RESEND_PU_CHECK,
-    RESEND_PU_TSEN,
     RESEND_PU_RECORD,
     RESEND_PU_WARMUP,
     RESEND_PU_GOPROFILE,
@@ -75,17 +74,14 @@ enum ScheduleAction_t : uint8_t {
     ACTION_BEGIN_PROFILE,
     ACTION_END_DWELL,
     ACTION_CHECK_PU,
-    ACTION_REQUEST_TSEN, // send the TSEN request
     ACTION_END_WARMUP,
     ACTION_END_PREPROFILE,
-    ACTION_OVERRIDE_TSEN, // if TSEN in manual, override for command
     ACTION_OFFLOAD_PU,
     ACTION_MOTION_TIMEOUT,
     ACTION_END_DOCK_WAIT,
 
     // Multi-action commands
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
-    COMMAND_SEND_TSEN, // check PU, request TSEN, send TM
     COMMAND_MANUAL_PROFILE,
     COMMAND_DOCKED_PROFILE,
 
@@ -155,7 +151,6 @@ private:
     bool Flight_Profile(bool restart_state);
     bool Flight_ReDock(bool restart_state);
     bool Flight_PUOffload(bool restart_state);
-    bool Flight_TSEN(bool restart_state);
     bool Flight_ManualMotion(bool restart_state);
     bool Flight_DockedProfile(bool restart_state);
 
@@ -207,12 +202,7 @@ private:
     void SendMCBEEPROM();
     void SendPIBEEPROM();
 
-    // send a telemetry packet with PU TSEN or Profile Record info
-    void SendTSENTM();
     void SendProfileTM(uint8_t packet_num);
-
-    // sets an action flag every ten minutes aligned with the hour
-    void CheckTSEN();
 
     // call every time the known state of the PU changes
     void PUDock();
@@ -241,10 +231,8 @@ private:
 
     // flags for PU state tracking
     bool record_received = false;
-    bool tsen_received = false;
     bool pu_no_more_records = false;
-    bool pu_warmup = false;
-    bool pu_profile = false;
+    bool pu_measure = false;
     bool pu_preprofile = false;
     bool check_pu_success = false;
 

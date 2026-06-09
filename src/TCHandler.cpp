@@ -24,7 +24,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         }
         deploy_length = mcbParam.deployLen;
         SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case DEPLOYv:
         pibConfigs.deploy_velocity.Write(mcbParam.deployVel);
@@ -43,7 +42,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         }
         retract_length = mcbParam.retractLen;
         SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case RETRACTv:
         pibConfigs.retract_velocity.Write(mcbParam.retractVel);
@@ -62,7 +60,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         }
         dock_length = mcbParam.dockLen;
         SetAction(ACTION_DOCK); // will be ignored if wrong mode
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case DOCKv:
         pibConfigs.dock_velocity.Write(mcbParam.dockVel);
@@ -80,7 +77,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
     case CANCELMOTION:
         mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(ACTION_MOTION_STOP);
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case ZEROREEL:
         if (mcb_dock_ongoing) {
@@ -202,7 +198,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 
         // schedule each action
         SetAction(COMMAND_REDOCK);
-        SetAction(ACTION_OVERRIDE_TSEN);
 
         // set the parameters
         deploy_length = mcbParam.deployLen;
@@ -240,7 +235,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 
         // schedule each action
         SetAction(COMMAND_MANUAL_PROFILE);
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case OFFLOADPUPROFILE:
         if (autonomous_mode) {
@@ -251,7 +245,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         log_nominal("Received offload PU profile TC");
 
         SetAction(ACTION_OFFLOAD_PU);
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case SETPREPROFILETIME:
         pibConfigs.preprofile_time.Write(pibParam.preprofileTime);
@@ -295,7 +288,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 
         // schedule each action
         SetAction(COMMAND_DOCKED_PROFILE);
-        SetAction(ACTION_OVERRIDE_TSEN);
         break;
     case STARTREALTIMEMCB:
         if (mcb_motion_ongoing) {
@@ -315,54 +307,44 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
 
     // PU Telecommands ------------------------------------
-    case PUWARMUPCONFIGS:
-        pibConfigs.flash_temp.Write(puParam.flashT);
-        pibConfigs.heater1_temp.Write(puParam.heater1T);
-        pibConfigs.heater2_temp.Write(puParam.heater2T);
-        pibConfigs.flash_power.Write(puParam.flashPower);
-        pibConfigs.tsen_power.Write(puParam.tsenPower);
-        snprintf(log_array, LOG_ARRAY_SIZE, "New PU warmup configs: %0.2f, %0.2f, %0.2f, %u, %u", pibConfigs.flash_temp.Read(),
-                 pibConfigs.heater1_temp.Read(), pibConfigs.heater2_temp.Read(), pibConfigs.flash_power.Read(), pibConfigs.tsen_power.Read());
+    case RPUBATTEMP:
+        pibConfigs.rpu_bat_temp.Write(rpuParam.batTemp);
+        snprintf(log_array, LOG_ARRAY_SIZE, "Set rpu_bat_temp: %0.2f", pibConfigs.rpu_bat_temp.Read());
         ZephyrLogFine(log_array);
         break;
-    case PUPROFILECONFIGS:
-        pibConfigs.profile_rate.Write(puParam.profileRate);
-        pibConfigs.dwell_rate.Write(puParam.dwellRate);
-        pibConfigs.profile_TSEN.Write(puParam.profileTSEN);
-        pibConfigs.profile_ROPC.Write(puParam.profileROPC);
-        pibConfigs.profile_FLASH.Write(puParam.profileFLASH);
-        snprintf(log_array, LOG_ARRAY_SIZE, "New PU profile configs: %lu, %lu, %u, %u, %u", pibConfigs.profile_rate.Read(),
-                 pibConfigs.dwell_rate.Read(), pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read());
-        ZephyrLogFine(log_array);
-        break;
-    case PURESET:
+    case RPURESET:
         puComm.TX_ASCII(RPU_RESET);
         break;
-    case PUDOCKEDCONFIGS:
-        pibConfigs.docked_rate.Write(puParam.dockedRate);
-        pibConfigs.docked_TSEN.Write(puParam.dockedTSEN);
-        pibConfigs.docked_ROPC.Write(puParam.dockedROPC);
-        pibConfigs.docked_FLASH.Write(puParam.dockedFLASH);
-        snprintf(log_array, LOG_ARRAY_SIZE, "New PU docked profile configs: %lu, %u, %u, %u", pibConfigs.docked_rate.Read(),
-                 pibConfigs.docked_TSEN.Read(), pibConfigs.docked_ROPC.Read(), pibConfigs.docked_FLASH.Read());
-        ZephyrLogFine(log_array);
-        break;
 
-    case RPUGOMEASURE:
-        pibConfigs.rpu_meas_period.Write(rpuParam.measPeriodSecs);
-        pibConfigs.rpu_enable_TSEN.Write(rpuParam.enableTSEN);
+    case RPUCONFIG:
+        pibConfigs.rpu_meas_rate.Write(rpuParam.measRateSecs);
         pibConfigs.rpu_enable_ROPC.Write(rpuParam.enableROPC);
+        pibConfigs.rpu_enable_TDLAS.Write(rpuParam.enableTDLAS);
+        pibConfigs.rpu_enable_TSEN.Write(rpuParam.enableTSEN);
         pibConfigs.rpu_enable_RS41.Write(rpuParam.enableRS41);
-        snprintf(log_array, LOG_ARRAY_SIZE, "New RPU measurement configs: %u, %u, %u, %u", pibConfigs.rpu_meas_period.Read(),
-                 pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_RS41.Read());
+        snprintf(log_array, LOG_ARRAY_SIZE, "RPU config: rate=%u ROPC=%u TDLAS=%u TSEN=%u RS41=%u",
+                 pibConfigs.rpu_meas_rate.Read(), pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
+                 pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
         ZephyrLogFine(log_array);
         break;
 
     case RPUSTATUSPERIOD:
-        pibConfigs.rpu_status_period.Write(rpuParam.statusPeriodSecs);
-        puComm.TX_SetStatusRate(pibConfigs.rpu_status_period.Read());
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set rpu_status_period: %u", pibConfigs.rpu_status_period.Read());
+        pibConfigs.rpu_status_rate.Write(rpuParam.statusPeriodSecs);
+        puComm.TX_SetStatusRate(pibConfigs.rpu_status_rate.Read());
+        snprintf(log_array, LOG_ARRAY_SIZE, "Set rpu_status_rate: %u", pibConfigs.rpu_status_rate.Read());
         ZephyrLogFine(log_array);
+        break;
+
+    case RPUGOSTANDBY:
+        puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read());
+        ZephyrLogFine("Sent go-standby to RPU");
+        break;
+    case RPUGOMEASURE:
+        puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(), pibConfigs.rpu_meas_rate.Read(),
+                            pibConfigs.rpu_bat_temp.Read(),
+                            pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
+                            pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
+        ZephyrLogFine("Sent go-measure to RPU");
         break;
 
     // General Telecommands -------------------------------

@@ -72,7 +72,6 @@ void StratoRatchuts::InstrumentSetup()
 void StratoRatchuts::InstrumentLoop()
 {
     WatchFlags();
-    CheckTSEN();
     LoRaRX();
 }
 
@@ -440,7 +439,7 @@ void StratoRatchuts::SendPIBEEPROM()
     mcbComm.binary_rx.bin_length = pibConfigs.Bufferize(mcbComm.binary_rx.bin_buffer, MAX_MCB_BINARY);
 
     if (0 == mcbComm.binary_rx.bin_length) {
-        log_error("Unable to bufferize PIB EEPROM");
+        log_error("Unable to bufferize RATCHUTS EEPROM");
         return;
     }
 
@@ -449,7 +448,7 @@ void StratoRatchuts::SendPIBEEPROM()
     zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
 
     // use only the first flag to preface the contents
-    zephyrTX.setStateDetails(1, "PIB EEPROM Contents");
+    zephyrTX.setStateDetails(1, "RATCHUTSEEPROM");
     zephyrTX.setStateFlagValue(1, FINE);
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);
@@ -459,26 +458,6 @@ void StratoRatchuts::SendPIBEEPROM()
     zephyrTX.TM();
 
     log_nominal("Sent PIB EEPROM as TM");
-}
-
-void StratoRatchuts::SendTSENTM()
-{
-    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TSEN: %lu, %0.2f, %0.2f, %0.2f, %0.2f, %u, %0.4f, %0.4f, %0.1f", pu_status.time, pu_status.v_battery, pu_status.i_charge, pu_status.therm1, pu_status.therm2, pu_status.heater_stat,zephyrRX.zephyr_gps.latitude,zephyrRX.zephyr_gps.longitude,zephyrRX.zephyr_gps.altitude)) {
-        zephyrTX.setStateDetails(1, log_array);
-        zephyrTX.setStateFlagValue(1, FINE);
-    } else {
-        zephyrTX.setStateDetails(1, "PU TSEN: unable to add status info");
-        zephyrTX.setStateFlagValue(1, WARN);
-    }
-
-    // use only the first flag to report the motion
-    zephyrTX.setStateFlagValue(2, NOMESS);
-    zephyrTX.setStateFlagValue(3, NOMESS);
-
-    TM_ack_flag = NO_ACK;
-    zephyrTX.TM();
-
-    log_nominal(log_array);
 }
 
 void StratoRatchuts::SendProfileTM(uint8_t packet_num)
@@ -501,19 +480,6 @@ void StratoRatchuts::SendProfileTM(uint8_t packet_num)
     log_nominal(log_array);
 }
 
-// every 15 minutes, aligned with the hour (called in InstrumentLoop)
-void StratoRatchuts::CheckTSEN()
-{
-    static time_t last_tsen = 0;
-
-    // check if it's been at least 15 minutes and the current minute is a multiple of 15
-    if ((now() > last_tsen + 840) && (0 == minute() % 15)) {
-        last_tsen = now();
-        ReadAnalog();
-        SetAction(COMMAND_SEND_TSEN);
-    }
-}
-
 void StratoRatchuts::PUDock()
 {
     pibConfigs.pu_docked.Write(true);
@@ -532,16 +498,14 @@ void StratoRatchuts::PUStartProfile()
     profile_start_latitude = zephyrRX.zephyr_gps.latitude;
     profile_start_longitude = zephyrRX.zephyr_gps.longitude;
     profile_start_altitude = zephyrRX.zephyr_gps.altitude;
-    
-    int32_t t_down = 60 * (deploy_length / pibConfigs.deploy_velocity.Read()) + pibConfigs.preprofile_time.Read();
-    int32_t t_up = 60 * (retract_length / pibConfigs.retract_velocity.Read() + dock_length / pibConfigs.dock_velocity.Read())
-                   + pibConfigs.motion_timeout.Read(); // extra time for dock delay
 
-    //puComm.TX_Profile(t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
-    //                pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
-    Serial.printf("Profile Params Sent to PU: %d, %d, %d, %d,%d, %d, %d, %d, %d\n",t_down, pibConfigs.dwell_time.Read(), t_up, pibConfigs.profile_rate.Read(), pibConfigs.dwell_rate.Read(),
-                      pibConfigs.profile_TSEN.Read(), pibConfigs.profile_ROPC.Read(), pibConfigs.profile_FLASH.Read(),pibConfigs.lora_tx_tm.Read());
-    pibConfigs.profile_id.Write(pibConfigs.profile_id.Read()+1); //increment the profile counter
+    // Enable RPU MEASURE mode with the configured measurement parameters
+    puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(), pibConfigs.rpu_meas_rate.Read(),
+                        pibConfigs.rpu_bat_temp.Read(),
+                        pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
+                        pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
+
+    pibConfigs.profile_id.Write(pibConfigs.profile_id.Read() + 1);
 }
 
 void StratoRatchuts::ReadAnalog()

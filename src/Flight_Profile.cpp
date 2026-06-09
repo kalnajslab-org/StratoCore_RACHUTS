@@ -10,11 +10,6 @@ enum ProfileStates_t {
     ST_ENTRY,
     ST_SEND_RA,
     ST_WAIT_RAACK,
-    ST_HOUSKEEPING_CHECK,
-    ST_SET_PU_WARMUP,
-    ST_CONFIRM_PU_WARMUP,
-    ST_WARMUP,
-    ST_GET_TSEN,
     ST_SET_PU_PROFILE,
     ST_CONFIRM_PU_PROFILE,
     ST_PREPROFILE_WAIT,
@@ -52,8 +47,8 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
 
     case ST_WAIT_RAACK:
         log_debug("FLA wait RA Ack");
-        if (ACK == RA_ack_flag) {
-            profile_state = ST_HOUSKEEPING_CHECK;
+        if (ACK == RA_ack_flag) { // set by Zephyr RA ack handler
+            profile_state = ST_SET_PU_PROFILE;
             resend_attempted = false;
             log_nominal("RA ACK");
         } else if (NAK == RA_ack_flag) {
@@ -72,29 +67,21 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         }
         break;
 
-    case ST_HOUSKEEPING_CHECK:
-        profile_state = ST_SET_PU_WARMUP;
-        resend_attempted = false;
-        break;
-
-    case ST_GET_TSEN:
-        if (Flight_TSEN(false)) {
-            profile_state = ST_SET_PU_PROFILE;
-        }
-        break;
-
     case ST_SET_PU_PROFILE:
         retract_length = pibConfigs.profile_size.Read() - pibConfigs.dock_amount.Read();
         deploy_length = pibConfigs.profile_size.Read();
         dock_length = pibConfigs.dock_amount.Read() + pibConfigs.dock_overshoot.Read();
-        pu_profile = false;
+        // pu_measure will be set in PURouter when the RPU acks the go-measure command
+        pu_measure = false; 
+        resend_attempted = false;
+        // Send the profile command to the PU with the configured parameters
         PUStartProfile();
         scheduler.AddAction(RESEND_PU_GOPROFILE, PU_RESEND_TIMEOUT);
         profile_state = ST_CONFIRM_PU_PROFILE;
         break;
 
     case ST_CONFIRM_PU_PROFILE:
-        if (pu_profile) {
+        if (pu_measure) { // set in PURouter when RPU acks RPU_GO_MEASURE
             profile_state = ST_PREPROFILE_WAIT;
             scheduler.AddAction(ACTION_END_PREPROFILE, pibConfigs.preprofile_time.Read());
         } else if (CheckAction(RESEND_PU_GOPROFILE)) {
@@ -103,7 +90,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 profile_state = ST_SET_PU_PROFILE;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("PU not responding to profile command");
+                ZephyrLogWarn("RPU not responding to go-measure command");
                 return true;
             }
         }
@@ -151,7 +138,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         break;
 
     case ST_VERIFY_DOCK:
-        if (pibConfigs.pu_docked.Read()) {
+        if (pibConfigs.pu_docked.Read()) { // written by Flight_CheckPU from RPU status
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
             delay(100);
             mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
@@ -179,7 +166,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
 
     case ST_START_MOTION:
         log_debug("FLA start motion");
-        if (mcb_motion_ongoing) {
+        if (mcb_motion_ongoing) { // set in MCBRouter when MCB acks motion command
             ZephyrLogWarn("Motion commanded while motion ongoing");
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
         }
@@ -195,7 +182,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
 
     case ST_VERIFY_MOTION:
         log_debug("FLA verify motion");
-        if (mcb_motion_ongoing) { // set in the Ack handler
+        if (mcb_motion_ongoing) { // set in MCBRouter when MCB acks motion command
             log_nominal("MCB commanded motion");
             scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
             profile_state = ST_MONITOR_MOTION;
@@ -229,7 +216,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
             break;
         }
 
-        if (!mcb_motion_ongoing) {
+        if (!mcb_motion_ongoing) { // cleared in MCBRouter when MCB reports motion complete
             log_nominal("Motion complete");
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
@@ -271,7 +258,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         break;
 
     case ST_CONFIRM_MCB_LP:
-        if (mcb_low_power) {
+        if (mcb_low_power) { // set in MCBRouter when MCB acks MCB_GO_LOW_POWER
             log_nominal("Profile finished, MCB in low power");
             mcb_low_power = false;
             return true;

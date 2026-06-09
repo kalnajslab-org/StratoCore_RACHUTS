@@ -59,14 +59,16 @@ void StratoRatchuts::HandlePUAck()
     switch (puComm.ack_id) {
     case RPU_GO_MEASURE:
         log_nominal("RPU in measure");
-        pu_warmup = true;
+        pu_measure = true;
         break;
     case RPU_GO_STANDBY:
         log_nominal("RPU in standby");
-        pu_profile = true;
         break;
     case RPU_RESET:
         ZephyrLogFine("RPU acked reset");
+        break;
+    case RPU_SET_STATUS_RATE:
+        log_nominal("RPU acked status rate");
         break;
     default:
         log_error("Unknown RPU ack received");
@@ -79,10 +81,6 @@ void StratoRatchuts::HandlePUBin()
     // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
     switch (puComm.binary_rx.bin_id) {
     case RPU_PROFILE_RECORD:
-        // prep the TM buffer
-        zephyrTX.clearTm();
-
-        // see if we can place in the buffer
         if (puComm.binary_rx.checksum_valid && zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
             record_received = true;
             puComm.TX_Ack(RPU_PROFILE_RECORD, true);
