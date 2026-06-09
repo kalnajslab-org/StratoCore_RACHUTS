@@ -23,25 +23,14 @@ PIBConfigs::PIBConfigs()
     , deploy_velocity(250.0f)
     , retract_velocity(250.0f)
     , dock_velocity(80.0f)
-    , flash_temp(-20.0f)
-    , heater1_temp(0.0f)
-    , heater2_temp(-15.0f)
-    , profile_rate(1)
-    , dwell_rate(10)
-    , flash_power(1)
-    , tsen_power(1)
-    , profile_TSEN(1)
-    , profile_ROPC(1)
-    , profile_FLASH(1)
-    , docked_rate(10)
-    , docked_TSEN(1)
-    , docked_ROPC(1)
-    , docked_FLASH(1)
-    , rpu_meas_period(60)
-    , rpu_status_period(1800)
+    , rpu_bat_temp(0.0f)
+    , rpu_status_rate(1800)
+    , rpu_meas_duration(60)
+    , rpu_meas_rate(10)
     , rpu_enable_TSEN(1)
     , rpu_enable_ROPC(1)
     , rpu_enable_RS41(1)
+    , rpu_enable_TDLAS(1)
     , dwell_time(900)
     , preprofile_time(180)
     , puwarmup_time(900)
@@ -74,25 +63,14 @@ void PIBConfigs::RegisterAll()
     success &= Register(&deploy_velocity);
     success &= Register(&retract_velocity);
     success &= Register(&dock_velocity);
-    success &= Register(&flash_temp);
-    success &= Register(&heater1_temp);
-    success &= Register(&heater2_temp);
-    success &= Register(&profile_rate);
-    success &= Register(&dwell_rate);
-    success &= Register(&flash_power);
-    success &= Register(&tsen_power);
-    success &= Register(&profile_TSEN);
-    success &= Register(&profile_ROPC);
-    success &= Register(&profile_FLASH);
-    success &= Register(&docked_rate);
-    success &= Register(&docked_TSEN);
-    success &= Register(&docked_ROPC);
-    success &= Register(&docked_FLASH);
-    success &= Register(&rpu_meas_period);
-    success &= Register(&rpu_status_period);
+    success &= Register(&rpu_bat_temp);
+    success &= Register(&rpu_status_rate);
+    success &= Register(&rpu_meas_duration);
+    success &= Register(&rpu_meas_rate);
     success &= Register(&rpu_enable_TSEN);
     success &= Register(&rpu_enable_ROPC);
     success &= Register(&rpu_enable_RS41);
+    success &= Register(&rpu_enable_TDLAS);
     success &= Register(&dwell_time);
     success &= Register(&preprofile_time);
     success &= Register(&puwarmup_time);
