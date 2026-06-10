@@ -33,18 +33,6 @@ void StratoRatchuts::RunPURouter()
 void StratoRatchuts::HandlePUASCII()
 {
     switch (puComm.ascii_rx.msg_id) {
-    case RPU_STATUS:
-        if (!puComm.ascii_rx.checksum_valid || !puComm.RX_Status(&pu_status.time, &pu_status.v_battery, &pu_status.i_charge, &pu_status.therm1, &pu_status.therm2, &pu_status.heater_stat)) {
-            pu_status.time = 0;
-            pu_status.v_battery = 0.0f;
-            pu_status.i_charge = 0.0f;
-            pu_status.therm1 = 0.0f;
-            pu_status.therm2 = 0.0f;
-            pu_status.heater_stat = 0;
-        } else {
-            pu_status.last_status = now();
-        }
-        break;
     case RPU_NO_MORE_RECORDS:
         pu_no_more_records = true;
         break;
@@ -100,6 +88,13 @@ void StratoRatchuts::HandlePUBin()
 void StratoRatchuts::HandlePUString()
 {
     switch (puComm.string_rx.str_id) {
+    case RPU_STATUS:
+        if (puComm.string_rx.checksum_valid && puComm.RX_Status(pu_status.json, sizeof(pu_status.json))) {
+            pu_status.last_status = now();
+        } else {
+            pu_status.json[0] = '\0';
+        }
+        break;
     case RPU_ERROR:
         if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
             ZephyrLogCrit(log_array);

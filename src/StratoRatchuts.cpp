@@ -462,7 +462,7 @@ void StratoRatchuts::SendPIBEEPROM()
 
 void StratoRatchuts::SendProfileTM(uint8_t packet_num)
 {
-    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_status.time, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_status.last_status, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
         zephyrTX.setStateDetails(1, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {

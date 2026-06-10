@@ -98,13 +98,8 @@ enum MCBMotion_t : uint8_t {
 };
 
 struct PUStatus_t {
-    uint32_t last_status;
-    uint32_t time;
-    float v_battery;
-    float i_charge;
-    float therm1;
-    float therm2;
-    uint8_t heater_stat;
+    uint32_t last_status;          // RACHUTS-local time of last received status
+    char json[STRING_BUFFER_SIZE]; // raw JSON status string from RPU
 };
 
 class StratoRatchuts : public StratoCore {
