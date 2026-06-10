@@ -79,6 +79,17 @@ void StratoRatchuts::HandlePUBin()
         }
         break;
 
+    case RPU_STATUS: {
+        char json_buf[512];
+        if (puComm.binary_rx.checksum_valid && puComm.RX_Status(json_buf, sizeof(json_buf))) {
+            pu_status_json = json_buf;
+            pu_last_status = now();
+        } else {
+            pu_status_json = "";
+        }
+        break;
+    }
+
     default:
         log_error("Unknown PU bin received");
         break;
@@ -88,13 +99,6 @@ void StratoRatchuts::HandlePUBin()
 void StratoRatchuts::HandlePUString()
 {
     switch (puComm.string_rx.str_id) {
-    case RPU_STATUS:
-        if (puComm.string_rx.checksum_valid && puComm.RX_Status(pu_status.json, sizeof(pu_status.json))) {
-            pu_status.last_status = now();
-        } else {
-            pu_status.json[0] = '\0';
-        }
-        break;
     case RPU_ERROR:
         if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
             ZephyrLogCrit(log_array);
