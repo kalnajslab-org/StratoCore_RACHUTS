@@ -9,6 +9,7 @@
 
 #include "src/StratoRatchuts.h"
 #include <TimerOne.h>
+#include "rachuts_version.h"
 
 #define LOOP_TENTHS     10 // defines loop period in 0.1s
 
@@ -46,6 +47,9 @@ void setup()
   ZEPHYR_SERIAL.begin(115200);
   MCB_SERIAL.begin(115200);
   PU_SERIAL.begin(115200);
+
+  delay(2000); // allow time to connect a serial monitor
+  Serial.println(String("StratoCore_RACHUTS ") + RACHUTS_VERSION + " Build: " + __DATE__ + " " + __TIME__);
 
   //Increase serial buffer sizes for Teensy 4.1
   ZEPHYR_SERIAL.addMemoryForRead(&Zephyr_serial_RX_buffer, sizeof(Zephyr_serial_RX_buffer));

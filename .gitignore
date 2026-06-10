@@ -1,4 +1,6 @@
 .pio/
 .vscode/
+__pycache__/
 src/StratoCore_RATCHUTS.cpp
+src/rachuts_version.h
 .DS_Store
