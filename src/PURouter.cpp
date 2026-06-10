@@ -84,6 +84,7 @@ void StratoRatchuts::HandlePUBin()
         if (puComm.binary_rx.checksum_valid && puComm.RX_Status(json_buf, sizeof(json_buf))) {
             pu_status_json = json_buf;
             pu_last_status = now();
+            pu_status_received = true;
         } else {
             pu_status_json = "";
         }

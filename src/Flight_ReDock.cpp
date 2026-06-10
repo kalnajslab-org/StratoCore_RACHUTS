@@ -100,7 +100,7 @@ bool StratoRatchuts::Flight_ReDock(bool restart_state)
 
     case ST_WAIT_PU:
         if (pibConfigs.pu_docked.Read()) {
-            SendRPUStatusTM(pu_status_json);
+            SendRPUStatusTM(pu_status_json, "FLM_REDOCK");
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
             return true;
             break;

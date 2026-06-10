@@ -110,7 +110,7 @@ void StratoRatchuts::LoRaRX()
             }
             Serial.println();
 
-            SendRPUStatusTM(json_str);
+            SendRPUStatusTM(json_str, "LORA");
         }
         else
         {
@@ -198,11 +198,12 @@ void StratoRatchuts::LoRaRX()
 }
 
 // Send the decoded RPU status (as JSON) to the ground as an RPUSTATUS TM
-void StratoRatchuts::SendRPUStatusTM(const String& json)
+void StratoRatchuts::SendRPUStatusTM(const String& json, const String& source)
 {
     zephyrTX.clearTm();
 
     zephyrTX.setStateDetails(1, "RPUSTATUS");
+    zephyrTX.setStateDetails(2, source);
     zephyrTX.setStateFlagValue(1, FINE);
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);

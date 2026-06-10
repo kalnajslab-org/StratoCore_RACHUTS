@@ -14,7 +14,6 @@ enum CheckPUStates_t {
 
 static CheckPUStates_t checkpu_state = ST_ENTRY;
 static bool resend_attempted = false;
-static uint32_t last_pu_status = 0;
 
 bool StratoRatchuts::Flight_CheckPU(bool restart_state)
 {
@@ -25,18 +24,24 @@ bool StratoRatchuts::Flight_CheckPU(bool restart_state)
         log_nominal("Starting CheckPU Flight State");
         resend_attempted = false;
         check_pu_success = false;
-        last_pu_status = pu_last_status;
+        pu_status_received = false;
         checkpu_state = ST_SEND_REQUEST;
         break;
 
     case ST_SEND_REQUEST:
         puComm.TX_ASCII(RPU_SEND_STATUS);
         scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
+        if (resend_attempted) {
+            log_nominal("CheckPU: resent RPU_SEND_STATUS request");
+        } else {
+            log_nominal("CheckPU: sent RPU_SEND_STATUS request");
+        }
         checkpu_state = ST_WAIT_REQUEST;
         break;
 
     case ST_WAIT_REQUEST:
-        if (last_pu_status != pu_last_status) {
+        if (pu_status_received) {
+            log_nominal("CheckPU: status received");
             resend_attempted = false;
             check_pu_success = true;
             return true;
@@ -45,6 +50,7 @@ bool StratoRatchuts::Flight_CheckPU(bool restart_state)
         if (CheckAction(RESEND_PU_CHECK)) {
             if (!resend_attempted) {
                 resend_attempted = true;
+                log_nominal("CheckPU: resend timeout, retrying request");
                 checkpu_state = ST_SEND_REQUEST;
             } else {
                 resend_attempted = false;

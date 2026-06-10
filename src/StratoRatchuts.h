@@ -113,7 +113,7 @@ public:
     void RunPURouter();
     void LoRaRX();
     void LoRaInit();
-    void SendRPUStatusTM(const String& json);
+    void SendRPUStatusTM(const String& json, const String& source);
 
 private:
     // internal serial interface objects for the MCB and PU
@@ -255,8 +255,9 @@ private:
     uint16_t MCB_TM_buffer_idx = 0;
 
     // PU status information
-    uint32_t pu_last_status = 0; // RACHUTS-local time of last received RPU status
-    String pu_status_json;       // raw JSON status string from RPU
+    uint32_t pu_last_status = 0;        // RACHUTS-local time of last received RPU status
+    String pu_status_json;              // raw JSON status string from RPU
+    bool pu_status_received = false;    // set when a fresh RPU_STATUS is received, cleared by Flight_CheckPU
 
     uint8_t eeprom_buffer[256];
 
