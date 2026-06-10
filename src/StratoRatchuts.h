@@ -97,11 +97,6 @@ enum MCBMotion_t : uint8_t {
     MOTION_IN_NO_LW
 };
 
-struct PUStatus_t {
-    uint32_t last_status;          // RACHUTS-local time of last received status
-    char json[STRING_BUFFER_SIZE]; // raw JSON status string from RPU
-};
-
 class StratoRatchuts : public StratoCore {
 public:
     StratoRatchuts();
@@ -260,7 +255,8 @@ private:
     uint16_t MCB_TM_buffer_idx = 0;
 
     // PU status information
-    PUStatus_t pu_status = {0};
+    uint32_t pu_last_status = 0; // RACHUTS-local time of last received RPU status
+    String pu_status_json;       // raw JSON status string from RPU
 
     uint8_t eeprom_buffer[256];
 

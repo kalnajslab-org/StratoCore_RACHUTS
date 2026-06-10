@@ -25,7 +25,7 @@ bool StratoRatchuts::Flight_CheckPU(bool restart_state)
         log_nominal("Starting CheckPU Flight State");
         resend_attempted = false;
         check_pu_success = false;
-        last_pu_status = pu_status.last_status;
+        last_pu_status = pu_last_status;
         checkpu_state = ST_SEND_REQUEST;
         break;
 
@@ -36,7 +36,7 @@ bool StratoRatchuts::Flight_CheckPU(bool restart_state)
         break;
 
     case ST_WAIT_REQUEST:
-        if (last_pu_status != pu_status.last_status) {
+        if (last_pu_status != pu_last_status) {
             resend_attempted = false;
             check_pu_success = true;
             return true;

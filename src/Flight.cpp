@@ -158,7 +158,7 @@ void StratoRatchuts::ManualFlight()
         if (Flight_CheckPU(false)) {
             // only send status if the PU check succeeded (otherwise an error message will have been sent)
             if (check_pu_success) {
-                SendRPUStatusTM(pu_status.json);
+                SendRPUStatusTM(pu_status_json);
             }
             inst_substate = FLM_IDLE;
         }
