@@ -386,15 +386,21 @@ void StratoRatchuts::SendPIBEEPROM()
 
 void StratoRatchuts::SendProfileTM(uint8_t packet_num)
 {
+    uint16_t num_records = puComm.binary_rx.bin_length / RPU_RECORD_BYTES;
+
+    zephyrTX.setStateDetails(1, "RPUREPORT");
+
+    snprintf(log_array, LOG_ARRAY_SIZE, "Number of RPURecords: %u", num_records);
+    zephyrTX.setStateDetails(2, log_array);
+
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_last_status, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
-        zephyrTX.setStateDetails(1, log_array);
+        zephyrTX.setStateDetails(3, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {
-        zephyrTX.setStateDetails(1, "PU Profile Record: unable to add status info");
+        zephyrTX.setStateDetails(3, "PU Profile Record: unable to add status info");
         zephyrTX.setStateFlagValue(1, WARN);
     }
 
-    // use only the first flag to report the motion
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);
 
