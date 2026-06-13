@@ -69,13 +69,21 @@ void StratoRatchuts::HandlePUBin()
     // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
     switch (puComm.binary_rx.bin_id) {
     case RPU_PROFILE_RECORD:
-        if (puComm.binary_rx.checksum_valid && zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
-            record_received = true;
-            puComm.TX_Ack(RPU_PROFILE_RECORD, true);
-        } else {
-            log_error("Profile record checksum invalid or error adding to TM buffer");
+        if (!puComm.binary_rx.checksum_valid) {
+            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record checksum invalid (len=%u)",
+                     puComm.binary_rx.bin_length);
+            log_error(log_array);
             puComm.TX_Ack(RPU_PROFILE_RECORD, false);
             zephyrTX.clearTm();
+        } else if (!zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
+            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record too large for TM buffer (len=%u, tm_used=%u)",
+                     puComm.binary_rx.bin_length, zephyrTX.getTmLen());
+            log_error(log_array);
+            puComm.TX_Ack(RPU_PROFILE_RECORD, false);
+            zephyrTX.clearTm();
+        } else {
+            record_received = true;
+            puComm.TX_Ack(RPU_PROFILE_RECORD, true);
         }
         break;
 
