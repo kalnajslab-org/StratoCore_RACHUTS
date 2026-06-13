@@ -78,15 +78,17 @@ bool StratoRatchuts::Flight_PUOffload(bool restart_state)
         break;
 
     case ST_TM_ACK:
+        // Loop straight back to request the next batch; the PU status is checked
+        // once at ST_ENTRY, not before every batch.
         if (ACK == TM_ack_flag) {
             resend_attempted = false;
-            puoffload_state = ST_GET_PU_STATUS;
+            puoffload_state = ST_REQUEST_PACKET;
         } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
             // attempt one resend
             log_error("Needed to resend TM");
             zephyrTX.TM(); // message is still saved in XMLWriter, no need to reconstruct
             resend_attempted = false;
-            puoffload_state = ST_GET_PU_STATUS;
+            puoffload_state = ST_REQUEST_PACKET;
         }
         break;
 
