@@ -37,7 +37,7 @@ void StratoRatchuts::StandbyMode()
         // send a mode request if time, and schedule the next
         if (CheckAction(SEND_IMR)) {
             log_nominal("Sending mode request to OBC");
-            zephyrTX.IMR();
+            ZephyrTXpoke(ZEPHYRTX_IMR);
             scheduler.AddAction(SEND_IMR, 60);
         }
         break;

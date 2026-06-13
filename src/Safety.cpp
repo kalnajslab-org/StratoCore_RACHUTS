@@ -117,7 +117,7 @@ void StratoRatchuts::SafetyMode()
     case SA_SEND_S:
         log_nominal("Sending safety message");
         digitalWrite(SAFE_PIN, HIGH);
-        zephyrTX.S();
+        ZephyrTXpoke(ZEPHYRTX_S);
         scheduler.AddAction(RESEND_SAFETY, ZEPHYR_RESEND_TIMEOUT);
         inst_substate = SA_ACK_WAIT;
         break;

@@ -27,7 +27,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
     case ST_ENTRY:
     case ST_SEND_RA:
         RA_ack_flag = NO_ACK;
-        zephyrTX.RA();
+        ZephyrTXpoke(ZEPHYRTX_RA);
         manualmotion_state = ST_WAIT_RAACK;
         scheduler.AddAction(RESEND_RA, ZEPHYR_RESEND_TIMEOUT);
         log_nominal("Sending RA");
@@ -119,7 +119,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
         } else if (NAK == TM_ack_flag || CheckAction(RESEND_TM)) {
             // attempt one resend
             log_error("Needed to resend TM");
-            zephyrTX.TM(); // message is still saved in XMLWriter, no need to reconstruct
+            ZephyrTXpoke(ZEPHYRTX_TM); // message is still saved in XMLWriter, no need to reconstruct
             return true;
         }
         break;

@@ -99,6 +99,14 @@ enum MCBMotion_t : uint8_t {
     MOTION_IN_NO_LW
 };
 
+// Specifies which ZephyrTX member function to call in ZephyrTXpoke().
+enum ZephyrTXMsgType_t : uint8_t {
+    ZEPHYRTX_TM,
+    ZEPHYRTX_S,
+    ZEPHYRTX_IMR,
+    ZEPHYRTX_RA
+};
+
 class StratoRatchuts : public StratoCore {
 public:
     StratoRatchuts();
@@ -116,6 +124,12 @@ public:
     void LoRaRX();
     void LoRaInit();
     void SendRPUStatusTM(const String& json, const String& source);
+
+    // Wake up the MAX3381 serial transceiver by sending a blank character to
+    // ZEPHYR_SERIAL before calling the specified ZephyrTX member function. The
+    // MAX3381 has a 30-second inactivity timeout, after which it powers down and
+    // can drop the first transmitted byte.
+    void ZephyrTXpoke(ZephyrTXMsgType_t msg_type);
 
 private:
     // internal serial interface objects for the MCB and PU

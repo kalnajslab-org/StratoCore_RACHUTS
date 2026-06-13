@@ -39,7 +39,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
     case ST_ENTRY:
     case ST_SEND_RA:
         RA_ack_flag = NO_ACK;
-        zephyrTX.RA();
+        ZephyrTXpoke(ZEPHYRTX_RA);
         profile_state = ST_WAIT_RAACK;
         scheduler.AddAction(RESEND_RA, ZEPHYR_RESEND_TIMEOUT);
         log_nominal("Sending RA");

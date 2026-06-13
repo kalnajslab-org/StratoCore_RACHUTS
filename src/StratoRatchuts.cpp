@@ -133,8 +133,30 @@ void StratoRatchuts::SendRPUStatusTM(const String& json, const String& source)
 
     zephyrTX.addTm((const uint8_t*)json.c_str(), json.length());
 
-    zephyrTX.TM();
+    ZephyrTXpoke(ZEPHYRTX_TM);
     zephyrTX.clearTm();
+}
+
+// Wake the MAX3381 transceiver with a throwaway byte (absorbing the dropped
+// first byte after its 30 s inactivity powerdown), then send the requested
+// Zephyr message.
+void StratoRatchuts::ZephyrTXpoke(ZephyrTXMsgType_t msg_type)
+{
+    ZEPHYR_SERIAL.write('\n');
+    switch (msg_type) {
+    case ZEPHYRTX_TM:
+        zephyrTX.TM();
+        break;
+    case ZEPHYRTX_S:
+        zephyrTX.S();
+        break;
+    case ZEPHYRTX_IMR:
+        zephyrTX.IMR();
+        break;
+    case ZEPHYRTX_RA:
+        zephyrTX.RA();
+        break;
+    }
 }
 
 // --------------------------------------------------------
@@ -289,7 +311,7 @@ void StratoRatchuts::AddMCBTM()
         zephyrTX.setStateFlagValue(1, FINE);
         zephyrTX.setStateFlagValue(2, NOMESS);
         zephyrTX.setStateFlagValue(3, NOMESS);
-        zephyrTX.TM();
+        ZephyrTXpoke(ZEPHYRTX_TM);
         log_nominal(log_array);
         MCB_TM_buffer_idx = 0; //reser the MCB buffer pointer
     }
@@ -328,7 +350,7 @@ void StratoRatchuts::SendMCBTM(StateFlag_t state_flag, const char * message)
     zephyrTX.setStateFlagValue(3, NOMESS);
 
     TM_ack_flag = NO_ACK;
-    zephyrTX.TM();
+    ZephyrTXpoke(ZEPHYRTX_TM);
 
     //log_nominal(log_array);
     MCB_TM_buffer_idx = 0;
@@ -352,7 +374,7 @@ void StratoRatchuts::SendMCBEEPROM()
 
     // send as TM
     TM_ack_flag = NO_ACK;
-    zephyrTX.TM();
+    ZephyrTXpoke(ZEPHYRTX_TM);
 
     log_nominal("Sent MCB EEPROM as TM");
 }
@@ -379,7 +401,7 @@ void StratoRatchuts::SendPIBEEPROM()
 
     // send as TM
     TM_ack_flag = NO_ACK;
-    zephyrTX.TM();
+    ZephyrTXpoke(ZEPHYRTX_TM);
 
     log_nominal("Sent PIB EEPROM as TM");
 }
@@ -405,7 +427,7 @@ void StratoRatchuts::SendProfileTM(uint8_t packet_num)
     zephyrTX.setStateFlagValue(3, NOMESS);
 
     TM_ack_flag = NO_ACK;
-    zephyrTX.TM();
+    ZephyrTXpoke(ZEPHYRTX_TM);
 
     log_nominal(log_array);
 }
