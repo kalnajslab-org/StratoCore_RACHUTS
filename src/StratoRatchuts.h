@@ -24,7 +24,9 @@
 #define INSTRUMENT   RACHUTS
 #define ZEPHYR_SERIAL_BUFFER_SIZE 4096
 #define MCB_SERIAL_BUFFER_SIZE    4096
-#define PU_SERIAL_BUFFER_SIZE     4096
+// Must exceed the largest RPU_PROFILE_RECORD frame (PU_BUFFER_SIZE payload plus
+// framing/checksum) so a full record batch buffers without UART RX overflow.
+#define PU_SERIAL_BUFFER_SIZE     16384
 
 // number of loops before a flag becomes stale and is reset
 #define FLAG_STALE      3
