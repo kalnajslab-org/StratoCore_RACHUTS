@@ -53,8 +53,14 @@ bool StratoRatchuts::Flight_PUOffload(bool restart_state)
         if (record_received) { // ACK/NAK in PURouter
             record_received = false;
             packet_num++;
-            snprintf(log_array, LOG_ARRAY_SIZE, "Received profile record: %u", puComm.binary_rx.bin_length);
-            log_nominal(log_array);
+
+            RPURecord first_record;
+            if (first_record.decode(puComm.binary_rx.bin_buffer, RPU_RECORD_BYTES)) {
+                snprintf(log_array, LOG_ARRAY_SIZE, "Profile block %u (%u bytes) recvd, first record elapsed_s=%lu",
+                         packet_num, puComm.binary_rx.bin_length, (unsigned long)first_record.getElapsedS());
+                log_nominal(log_array);
+            }
+
             SendProfileTM(packet_num);
             puoffload_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
