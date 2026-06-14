@@ -48,17 +48,19 @@ records" impressions were small-sample artifacts of this probability curve.
   first-byte-after-idle drop).
 
 **Mitigations in place.**
-- RPU batch capped at **150 records** (~5700 bytes) — lower per-frame failure
-  probability than 200 (which failed almost always).
+- RPU batch capped at **120 records** (~4560 bytes, `RPU_TM_MAX_RECORDS`) — lower
+  per-frame failure probability than 150/200 (200 failed almost always). The
+  ~45% figure above was measured at the earlier 150-record/5700-byte cap.
 - Per-block NAK retransmit on the RPU + RACHUTS `RESEND_PU_RECORD` timeout.
 
 **Still open / to try.**
 - The link is genuinely marginal; retransmits recover single failures but the
   offload still aborts when two land back-to-back. The real fix is hardware:
   **inspect the MAX3381 charge-pump capacitors** (see §9) and/or **lower the
-  dock baud** (115200 → 57600) to buy timing margin — note that at 57600 a
-  5700-byte frame (~990 ms) brushes the 1000 ms `Read_Bin` timeout, so pair a
-  baud drop with a smaller batch or a longer timeout.
+  dock baud** (115200 → 57600) to buy timing margin — note the `Read_Bin`
+  timeout is 1000 ms, so watch the block transfer time if you drop baud or raise
+  the batch size (the current ~4560-byte block is ~790 ms at 57600; a larger
+  block or lower baud would brush the limit).
 
 **Legacy comparison.** The legacy PU (`PUCode/RACHuTS_PU_V2_5.ino`) sent up to
 200×30 B = 6000 B profile batches and 750×10 B = 7500 B TSEN batches reliably —
@@ -243,3 +245,41 @@ timeouts. Removed; the USB `Serial.println(json)` was kept.
 - **`RPURecord` JSON debug print** is gated behind the `d` console command
   (default off) to avoid per-tick USB blocking and `String` heap churn; the
   console status print interval defaults to 0 (off), settable with `c <s>`.
+
+---
+
+## Appendix A — RACHUTS Telemetry (TM) catalog
+
+Every RACHUTS TM is a Zephyr/StrateoleXML telemetry message identified on the
+ground by its **StateMess1** tag, optionally with **StateMess2/StateMess3**
+detail strings and **StateFlag1–3** values, plus a binary payload added via
+`zephyrTX.addTm(...)`. All are transmitted through `ZephyrTXpoke(ZEPHYRTX_TM)`
+(wake byte + `zephyrTX.TM()`). Unless noted, StateFlag2/3 = `NOMESS` and
+StateMess2/3 are empty (omitted from the XML).
+
+| TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
+|---|---|---|---|---|---|
+| `RPUSTATUS` | `SendRPUSTATUS(json, source)` | `source`: `LORA` / `FLM_CHECK_PU` / `FLM_REDOCK` | — | `FINE` | RPU status as a JSON text string, **variable length** (received into a 512-byte buffer on RACHUTS). From `RPUPacket::toJSON()` (LoRa path) or the dock `RPU_STATUS` reply. The `RPUPacket` field set changes over time, so the length is not fixed — don't hard-code it. |
+| `RPUREPORT` | `SendRPUREPORT(packet_num)` (payload added in `HandlePUBin`, PURouter) | `Number of RPURecords: <n>` | `PU TM: <profile_id>.<packet_num>, <pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 38 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
+| `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
+| _motion message_ (see below) | `SendMCBTM(flag, message)` | — | — | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
+| `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |
+| `RATCHUTSEEPROM` | `SendPIBEEPROM()` | — | — | `FINE` | PIB/RACHUTS EEPROM dump (`pibConfigs.Bufferize` into the MCB binary RX buffer, `bin_length` B). |
+
+**`SendMCBTM` messages** (the StateMess1 value, set by the caller): `Finished
+profile reel out`, `Finished profile reel in`, `Finished commanded manual
+motion`, `MCB Motion took longer than expected` (CRIT), `Unknown motion finished
+in profile monitor` (CRIT), `MCB dock detected: ...`, `MCB Fault: ...`, and the
+MCBRouter-built `log_array` strings.
+
+**Resends (not distinct TM types):** `Flight_ManualMotion` (ST after a motion TM)
+and `Flight_PUOffload` (`ST_TM_ACK`) call `ZephyrTXpoke(ZEPHYRTX_TM)` to
+re-transmit the **most recently built** TM from the XMLWriter on a NAK/timeout —
+no new message is constructed.
+
+**Notes:**
+- `RPUSTATUS` and `RPUREPORT` builders were renamed from `SendRPUStatusTM` /
+  `SendProfileTM` so the function name matches the StateMess1 tag.
+- The `RPUREPORT` payload is added to the TM buffer in `HandlePUBin` (PURouter)
+  when the record block passes checksum; `SendRPUREPORT` only sets the state
+  details/flags and transmits.
