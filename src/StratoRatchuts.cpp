@@ -127,6 +127,7 @@ void StratoRatchuts::SendRPUStatusTM(const String& json, const String& source)
 
     zephyrTX.setStateDetails(1, "RPUSTATUS");
     zephyrTX.setStateDetails(2, source);
+    zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, FINE);
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);
@@ -308,6 +309,8 @@ void StratoRatchuts::AddMCBTM()
         snprintf(log_array, LOG_ARRAY_SIZE, "MCB TM Packet %u", ++mcb_tm_counter);
         zephyrTX.addTm(MCB_TM_buffer,MCB_TM_buffer_idx);
         zephyrTX.setStateDetails(1, log_array);
+        zephyrTX.setStateDetails(2, "");
+        zephyrTX.setStateDetails(3, "");
         zephyrTX.setStateFlagValue(1, FINE);
         zephyrTX.setStateFlagValue(2, NOMESS);
         zephyrTX.setStateFlagValue(3, NOMESS);
@@ -345,6 +348,8 @@ void StratoRatchuts::SendMCBTM(StateFlag_t state_flag, const char * message)
     // use only the first flag to report the motion
     zephyrTX.addTm(MCB_TM_buffer,MCB_TM_buffer_idx);
     zephyrTX.setStateDetails(1, message);
+    zephyrTX.setStateDetails(2, "");
+    zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, state_flag);
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);
@@ -368,6 +373,8 @@ void StratoRatchuts::SendMCBEEPROM()
 
     // use only the first flag to preface the contents
     zephyrTX.setStateDetails(1, "MCB EEPROM Contents");
+    zephyrTX.setStateDetails(2, "");
+    zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, FINE);
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);
@@ -395,6 +402,8 @@ void StratoRatchuts::SendPIBEEPROM()
 
     // use only the first flag to preface the contents
     zephyrTX.setStateDetails(1, "RATCHUTSEEPROM");
+    zephyrTX.setStateDetails(2, "");
+    zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, FINE);
     zephyrTX.setStateFlagValue(2, NOMESS);
     zephyrTX.setStateFlagValue(3, NOMESS);

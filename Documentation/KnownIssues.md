@@ -172,15 +172,20 @@ which RATS lacks).
 
 ---
 
-## 6. Stale StateDetails leak in TMs (RACHUTS) — **OPEN**
+## 6. Stale StateDetails leak in TMs (RACHUTS) — **FIXED**
 
 `zephyrTX` keeps `details1/2/3` as persistent `String` members, and `clearTm()`
-resets only the TM payload buffer, not the detail strings. `SendRPUStatusTM`
-sets only details 1 and 2, so an RPUSTATUS TM inherits a **stale** StateDetails 3
-(`"PU TM: <id>.<n>, ..."`) left over from the most recent `SendProfileTM`. Same
-latent issue in `SendMCBTM`/`SendMCBEEPROM`/`SendPIBEEPROM` (they set only detail
-1, carrying stale 2 and 3). Fix: have each TM builder set all three details
-explicitly (or clear them).
+resets only the TM payload buffer, not the detail strings. Builders that set only
+some details left the rest stale: `SendRPUStatusTM` (set 1, 2) inherited a stale
+StateDetails 3 (`"PU TM: <id>.<n>, ..."`) from the most recent `SendProfileTM`,
+and `SendMCBTM`/`AddMCBTM`/`SendMCBEEPROM`/`SendPIBEEPROM` (set only detail 1)
+carried stale 2 and 3.
+
+**Fix.** Each TM builder now sets all three details explicitly, using `""` for
+unused ones. The XMLWriter only emits a `StateMessN` tag when the detail string
+is non-empty (XMLWriter_v5.cpp), so an empty detail is *omitted* from the TM
+rather than emitted blank — no stale content, no empty tags. `SendProfileTM`
+already set all three.
 
 ---
 
