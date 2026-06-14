@@ -424,10 +424,12 @@ void StratoRatchuts::SendRPUREPORT(uint8_t packet_num)
 
     zephyrTX.setStateDetails(1, "RPUREPORT");
 
-    snprintf(log_array, LOG_ARRAY_SIZE, "%u RPURecords", num_records);
+    snprintf(log_array, LOG_ARRAY_SIZE, "profile: %u packet:%u records: %u", 
+        pibConfigs.profile_id.Read(), packet_num, num_records);
     zephyrTX.setStateDetails(2, log_array);
 
-    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_last_status, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
+    if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "%lu, %0.4f, %0.4f, %0.1f", 
+        pu_last_status, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {
         zephyrTX.setStateDetails(3, log_array);
         zephyrTX.setStateFlagValue(1, FINE);
     } else {
