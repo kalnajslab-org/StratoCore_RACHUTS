@@ -31,6 +31,7 @@ enum SAStates_t : uint8_t {
 
 void StratoRatchuts::SafetyMode()
 {
+    mode_code = "SA";
     switch (inst_substate) {
     case SA_ENTRY:
         // perform setup

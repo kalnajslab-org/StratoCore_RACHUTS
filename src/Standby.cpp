@@ -21,6 +21,7 @@ enum SBStates_t : uint8_t {
 
 void StratoRatchuts::StandbyMode()
 {
+    mode_code = "SB";
     switch (inst_substate) {
     case SB_ENTRY:
         log_nominal("Entering SB");

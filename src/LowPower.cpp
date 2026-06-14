@@ -23,6 +23,7 @@ enum LPStates_t : uint8_t {
 
 void StratoRatchuts::LowPowerMode()
 {
+    mode_code = "LP";
     switch (inst_substate) {
     case LP_ENTRY:
         // perform setup

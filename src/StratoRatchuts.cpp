@@ -125,8 +125,11 @@ void StratoRatchuts::SendRPUSTATUS(const String& json, const String& source)
 {
     zephyrTX.clearTm();
 
+    // StateDetails 2 = "<mode>, <source>" (mode_code tracked per mode function)
+    snprintf(log_array, LOG_ARRAY_SIZE, "%s, %s", mode_code, source.c_str());
+
     zephyrTX.setStateDetails(1, "RPUSTATUS");
-    zephyrTX.setStateDetails(2, source);
+    zephyrTX.setStateDetails(2, log_array);
     zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, FINE);
     zephyrTX.setStateFlagValue(2, NOMESS);

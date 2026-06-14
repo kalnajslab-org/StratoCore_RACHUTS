@@ -220,6 +220,10 @@ private:
     // Read the analog channels on the PIB
     void ReadAnalog();
 
+    // 2-letter code of the current StratoCore mode (SB/FL/LP/SA/EF), set at the
+    // top of each mode function. Used in the RPUSTATUS TM StateDetails.
+    const char * mode_code = "SB";
+
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
     // track the flight mode (autonomous/manual)

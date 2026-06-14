@@ -21,6 +21,7 @@ enum EFStates_t : uint8_t {
 
 void StratoRatchuts::EndOfFlightMode()
 {
+    mode_code = "EF";
     switch (inst_substate) {
     case EF_ENTRY:
         // perform setup

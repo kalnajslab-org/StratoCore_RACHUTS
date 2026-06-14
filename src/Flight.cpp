@@ -49,6 +49,7 @@ enum FLStates_t : uint8_t {
 //  * it is up to the FL_EXIT logic perform any actions for leaving flight mode
 void StratoRatchuts::FlightMode()
 {
+    mode_code = "FL";
     // todo: draw out flight mode state machine
     switch (inst_substate) {
     case FL_ENTRY:
