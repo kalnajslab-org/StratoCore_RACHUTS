@@ -110,7 +110,7 @@ void StratoRatchuts::LoRaRX()
             }
             Serial.println();
 
-            SendRPUStatusTM(json_str, "LORA");
+            SendRPUSTATUS(json_str, "LORA");
         }
         else
         {
@@ -121,7 +121,7 @@ void StratoRatchuts::LoRaRX()
 }
 
 // Send the decoded RPU status (as JSON) to the ground as an RPUSTATUS TM
-void StratoRatchuts::SendRPUStatusTM(const String& json, const String& source)
+void StratoRatchuts::SendRPUSTATUS(const String& json, const String& source)
 {
     zephyrTX.clearTm();
 
@@ -415,13 +415,13 @@ void StratoRatchuts::SendPIBEEPROM()
     log_nominal("Sent PIB EEPROM as TM");
 }
 
-void StratoRatchuts::SendProfileTM(uint8_t packet_num)
+void StratoRatchuts::SendRPUREPORT(uint8_t packet_num)
 {
     uint16_t num_records = puComm.binary_rx.bin_length / RPU_RECORD_BYTES;
 
     zephyrTX.setStateDetails(1, "RPUREPORT");
 
-    snprintf(log_array, LOG_ARRAY_SIZE, "Number of RPURecords: %u", num_records);
+    snprintf(log_array, LOG_ARRAY_SIZE, "%u RPURecords", num_records);
     zephyrTX.setStateDetails(2, log_array);
 
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "PU TM: %u.%u, %lu, %0.4f, %0.4f, %0.1f", pibConfigs.profile_id.Read(), packet_num, pu_last_status, profile_start_latitude, profile_start_longitude, profile_start_altitude)) {

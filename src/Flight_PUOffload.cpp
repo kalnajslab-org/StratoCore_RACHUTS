@@ -61,7 +61,7 @@ bool StratoRatchuts::Flight_PUOffload(bool restart_state)
                 log_nominal(log_array);
             }
 
-            SendProfileTM(packet_num);
+            SendRPUREPORT(packet_num);
             puoffload_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
             break;

@@ -123,7 +123,7 @@ public:
     void RunPURouter();
     void LoRaRX();
     void LoRaInit();
-    void SendRPUStatusTM(const String& json, const String& source);
+    void SendRPUSTATUS(const String& json, const String& source);
 
     // Wake up the MAX3381 serial transceiver by sending a blank character to
     // ZEPHYR_SERIAL before calling the specified ZephyrTX member function. The
@@ -208,7 +208,7 @@ private:
     void SendMCBEEPROM();
     void SendPIBEEPROM();
 
-    void SendProfileTM(uint8_t packet_num);
+    void SendRPUREPORT(uint8_t packet_num);
 
     // call every time the known state of the PU changes
     void PUDock();
