@@ -317,13 +317,14 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
 
     case RPUCONFIG:
+        pibConfigs.rpu_meas_duration.Write(rpuParam.measDurationSecs);
         pibConfigs.rpu_meas_rate.Write(rpuParam.measRateSecs);
         pibConfigs.rpu_enable_ROPC.Write(rpuParam.enableROPC);
         pibConfigs.rpu_enable_TDLAS.Write(rpuParam.enableTDLAS);
         pibConfigs.rpu_enable_TSEN.Write(rpuParam.enableTSEN);
         pibConfigs.rpu_enable_RS41.Write(rpuParam.enableRS41);
-        snprintf(log_array, LOG_ARRAY_SIZE, "RPU config: rate=%u ROPC=%u TDLAS=%u TSEN=%u RS41=%u",
-                 pibConfigs.rpu_meas_rate.Read(), pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
+        snprintf(log_array, LOG_ARRAY_SIZE, "RPU config: duration=%u rate=%u ROPC=%u TDLAS=%u TSEN=%u RS41=%u",
+                 pibConfigs.rpu_meas_duration.Read(), pibConfigs.rpu_meas_rate.Read(), pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
                  pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
         ZephyrLogFine(log_array);
         break;
@@ -340,7 +341,8 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogFine("Sent go-standby to RPU");
         break;
     case RPUGOMEASURE:
-        puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(), pibConfigs.rpu_meas_rate.Read(),
+        puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(), 
+                            pibConfigs.rpu_meas_rate.Read(),
                             pibConfigs.rpu_bat_temp.Read(),
                             pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
                             pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
