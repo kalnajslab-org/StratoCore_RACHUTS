@@ -341,12 +341,16 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogFine("Sent go-standby to RPU");
         break;
     case RPUGOMEASURE:
-        puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(), 
-                            pibConfigs.rpu_meas_rate.Read(),
+        // Duration and rate come from the TC parameters; battery setpoint and
+        // sensor-enable flags still come from the stored RPU config.
+        puComm.TX_GoMeasure(rpuParam.measDurationSecs,
+                            rpuParam.measRateSecs,
                             pibConfigs.rpu_bat_temp.Read(),
                             pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
                             pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
-        ZephyrLogFine("Sent go-measure to RPU");
+        snprintf(log_array, LOG_ARRAY_SIZE, "Sent go-measure to RPU: duration=%u rate=%u",
+                 rpuParam.measDurationSecs, rpuParam.measRateSecs);
+        ZephyrLogFine(log_array);
         break;
 
     // General Telecommands -------------------------------
