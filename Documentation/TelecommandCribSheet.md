@@ -117,8 +117,18 @@ Notes:
 
 ## Common sequences
 
-- **Get RPU status (manual):** `143` → RPUSTATUS TM.
-- **Bench RPU measure + offload:** `180` (config) → `185` (go-measure, with
-  duration/rate) → wait → `184` (standby) → `147` (offload) → RPUREPORT TMs.
-- **Manual profile:** `131` (manual) → `146` (with size/dock/overshoot/dwell).
-- **Dump configs:** `18` (MCB EEPROM), `152` (PIB EEPROM).
+- **Get RPU status (manual):**
+  - `143` GETPUSTATUS *(no params)* → RPUSTATUS TM.
+- **Bench RPU measure + offload:**
+  - `181` RPUSTATUSPERIOD(period s) — set how often the RPU reports status
+  - `180` RPUCONFIG(duration s, rate s, ROPC 0/1, TDLAS 0/1, TSEN 0/1, RS41 0/1)
+  - `185` RPUGOMEASURE(duration s, rate s)
+  - *wait for the measurement*
+  - `184` RPUGOSTANDBY *(no params)*
+  - `147` OFFLOADPUPROFILE *(no params)* → RPUREPORT TMs.
+- **Manual profile:**
+  - `131` SETMANUAL *(no params)*
+  - `146` MANUALPROFILE(profile size rev, dock amount rev, dock overshoot rev, dwell s)
+- **Dump configs:**
+  - `18` GETMCBEEPROM *(no params)*
+  - `152` GETPIBEEPROM *(no params)*
