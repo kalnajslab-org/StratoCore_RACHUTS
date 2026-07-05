@@ -8,6 +8,23 @@
 
 #include "StratoRatchuts.h"
 
+// Guard for manual-only TCs. mode_code is set at the top of each mode function,
+// so it reflects the current StratoCore mode when a TC is handled.
+bool StratoRatchuts::RequireManualFlight(const char * cmd)
+{
+    if (0 != strcmp(mode_code, "FL")) {
+        snprintf(log_array, LOG_ARRAY_SIZE, "%s ignored: not in flight mode", cmd);
+        ZephyrLogWarn(log_array);
+        return false;
+    }
+    if (autonomous_mode) {
+        snprintf(log_array, LOG_ARRAY_SIZE, "%s ignored: switch to manual mode", cmd);
+        ZephyrLogWarn(log_array);
+        return false;
+    }
+    return true;
+}
+
 // The telecommand handler must return ACK/NAK
 bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 {
@@ -190,10 +207,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogFine(log_array);
         break;
     case RETRYDOCK:
-        if (autonomous_mode) {
-            ZephyrLogWarn("Switch to manual mode before commanding motion");
-            break;
-        }
+        if (!RequireManualFlight("Retry dock")) break;
         log_nominal("Received retry dock telecommand");
 
         // schedule each action
@@ -204,11 +218,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         retract_length = mcbParam.retractLen;
         break;
     case GETPUSTATUS:
-        if (autonomous_mode) {
-            ZephyrLogWarn("PU Status TC only implemented for manual");
-            break;
-        }
-
+        if (!RequireManualFlight("Get PU status")) break;
         log_nominal("Received get PU status TC");
 
         SetAction(ACTION_CHECK_PU);
@@ -222,10 +232,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         ZephyrLogFine("PU powered off");
         break;
     case MANUALPROFILE:
-        if (autonomous_mode) {
-            ZephyrLogWarn("Switch to manual mode before commanding motion");
-            break;
-        }
+        if (!RequireManualFlight("Manual profile")) break;
         log_nominal("Received manual profile telecommand");
 
         pibConfigs.profile_size.Write(pibParam.profileSize);
@@ -237,11 +244,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         SetAction(COMMAND_MANUAL_PROFILE);
         break;
     case OFFLOADPUPROFILE:
-        if (autonomous_mode) {
-            ZephyrLogWarn("PU Profile offload TC only implemented for manual");
-            break;
-        }
-
+        if (!RequireManualFlight("PU profile offload")) break;
         log_nominal("Received offload PU profile TC");
 
         SetAction(ACTION_OFFLOAD_PU);
@@ -277,10 +280,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         }
         break;
     case DOCKEDPROFILE:
-        if (autonomous_mode) {
-            ZephyrLogWarn("Switch to manual mode before commanding docked profile");
-            break;
-        }
+        if (!RequireManualFlight("Docked profile")) break;
         log_nominal("Received docked profile telecommand");
 
         // set the duration

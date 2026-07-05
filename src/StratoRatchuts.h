@@ -163,6 +163,11 @@ private:
     // Telcommand handler - returns ack/nak
     bool TCHandler(Telecommand_t telecommand);
 
+    // Guard for manual-only TCs: returns true if in manual flight mode,
+    // otherwise sends a ZephyrLogWarn naming the command + required mode and
+    // returns false (so the caller can break out without acting).
+    bool RequireManualFlight(const char * cmd);
+
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);
 
