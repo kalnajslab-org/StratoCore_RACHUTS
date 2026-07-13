@@ -123,8 +123,9 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         if (mcb_dock_ongoing) {
             msg3 = "Can't zero reel, motion ongoing";
             msg1_flag = WARN;
+        } else {
+            mcbComm.TX_ASCII(MCB_ZERO_REEL);
         }
-        mcbComm.TX_ASCII(MCB_ZERO_REEL);
         break;
     case TEMPLIMITS:
         msg2 = "TC Set Temperature Limits";
