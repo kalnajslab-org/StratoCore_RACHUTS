@@ -210,7 +210,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         }
 
         if (CheckAction(ACTION_MOTION_TIMEOUT)) {
-            SendMCBTM(CRIT, "MCB Motion took longer than expected");
+            SendMCBTM("MCBREPORT", CRIT, "MCB Motion took longer than expected");
             mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;
@@ -220,7 +220,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
             log_nominal("Motion complete");
             switch (mcb_motion) {
             case MOTION_REEL_OUT:
-                SendMCBTM(FINE, "Finished profile reel out");
+                SendMCBTM("MCBREPORT", FINE, "Finished profile reel out");
                 if (scheduler.AddAction(ACTION_END_DWELL, pibConfigs.dwell_time.Read())) {
                     snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled dwell: %u s", pibConfigs.dwell_time.Read());
                     log_nominal(log_array);
@@ -231,7 +231,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 }
                 break;
             case MOTION_REEL_IN:
-                SendMCBTM(FINE, "Finished profile reel in");
+                SendMCBTM("MCBREPORT", FINE, "Finished profile reel in");
                 scheduler.AddAction(ACTION_END_DOCK_WAIT, 60);
                 profile_state = ST_DOCK_WAIT;
                 break;
@@ -242,7 +242,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 profile_state = ST_GET_PU_STATUS;
                 break;
             default:
-                SendMCBTM(CRIT, "Unknown motion finished in profile monitor");
+                SendMCBTM("MCBREPORT", CRIT, "Unknown motion finished in profile monitor");
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
                 break;
             }

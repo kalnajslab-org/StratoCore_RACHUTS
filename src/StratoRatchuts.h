@@ -207,7 +207,7 @@ private:
     void NoteProfileStart();
 
     // Send a telemetry packet with MCB binary info
-    void SendMCBTM(StateFlag_t state_flag, const char * message);
+    void SendMCBTM(const char * TMname, StateFlag_t state_flag, const char * message);
 
     // Send a telemetry packet with EEPROM contents
     void SendMCBEEPROM();

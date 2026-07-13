@@ -49,7 +49,7 @@ void StratoRatchuts::HandleMCBASCII()
             if (mcb_dock_ongoing) { // todo: ensure the correct motion fault flags for dock
                 snprintf(log_array, LOG_ARRAY_SIZE, "MCB: dock condition assumed: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
                          motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
-                SendMCBTM(FINE, log_array);
+                SendMCBTM("MCBASCII", FINE, log_array);
                 mcb_dock_ongoing = false;
                 mcb_motion_ongoing = false;
                 return;
@@ -58,17 +58,17 @@ void StratoRatchuts::HandleMCBASCII()
             mcb_motion_ongoing = false;
             snprintf(log_array, LOG_ARRAY_SIZE, "MCB Fault: %x,%x,%x,%x,%x,%x,%x,%x", motion_fault[0], motion_fault[1],
                      motion_fault[2], motion_fault[3], motion_fault[4], motion_fault[5], motion_fault[6], motion_fault[7]);
-            SendMCBTM(CRIT, log_array);
+            SendMCBTM("MCBASCII", CRIT, log_array);
             inst_substate = MODE_ERROR;
         } else {
             if (mcb_dock_ongoing) {
-                SendMCBTM(FINE, "MCB dock detected: error receiving expected fault info");
+                SendMCBTM("MCBASCII", FINE, "MCB dock detected: error receiving expected fault info");
                 mcb_dock_ongoing = false;
                 mcb_motion_ongoing = false;
                 return;
             }
             mcb_motion_ongoing = false;
-            SendMCBTM(CRIT, "MCB Fault: error receiving parameters");
+            SendMCBTM("MCBASCII", CRIT, "MCB Fault: error receiving parameters");
             inst_substate = MODE_ERROR;
         }
         break;
@@ -82,7 +82,7 @@ void StratoRatchuts::HandleMCBAck()
 {
     switch (mcbComm.ack_id) {
     case MCB_GO_LOW_POWER:
-        log_nominal("MCB in low power");
+        SendMCBTM("MCBACK", FINE, "MCB in low power");
         mcb_low_power = true;
         break;
     case MCB_REEL_IN:
@@ -101,31 +101,31 @@ void StratoRatchuts::HandleMCBAck()
         mcb_reeling_in = true;
         break;
     case MCB_IN_ACC:
-        ZephyrLogFine("MCB acked retract acc");
+        SendMCBTM("MCBACK", FINE, "MCB acked retract acc");
         break;
     case MCB_OUT_ACC:
-        ZephyrLogFine("MCB acked deploy acc");
+        SendMCBTM("MCBACK", FINE, "MCB acked deploy acc");
         break;
     case MCB_DOCK_ACC:
-        ZephyrLogFine("MCB acked dock acc");
+        SendMCBTM("MCBACK", FINE, "MCB acked dock acc");
         break;
     case MCB_ZERO_REEL:
-        ZephyrLogFine("MCB acked zero reel");
+        SendMCBTM("MCBACK", FINE, "MCB acked zero reel");
         break;
     case MCB_TEMP_LIMITS:
-        ZephyrLogFine("MCB acked temp limits");
+        SendMCBTM("MCBACK", FINE, "MCB acked temp limits");
         break;
     case MCB_TORQUE_LIMITS:
-        ZephyrLogFine("MCB acked torque limits");
+        SendMCBTM("MCBACK", FINE, "MCB acked torque limits");
         break;
     case MCB_CURR_LIMITS:
-        ZephyrLogFine("MCB acked curr limits");
+        SendMCBTM("MCBACK", FINE, "MCB acked curr limits");
         break;
     case MCB_IGNORE_LIMITS:
-        ZephyrLogFine("MCB acked ignore limits");
+        SendMCBTM("MCBACK", FINE, "MCB acked ignore limits");
         break;
     case MCB_USE_LIMITS:
-        ZephyrLogFine("MCB acked use limits");
+        SendMCBTM("MCBACK", FINE, "MCB acked use limits");
         break;
     default:
         log_error("Unknown MCB ack received");
@@ -135,7 +135,7 @@ void StratoRatchuts::HandleMCBAck()
 
 void StratoRatchuts::HandleMCBBin()
 {
-    float reel_pos = 0;
+    // reel_pos is a member (used in SendMCBTM StateMess3); update it here.
     uint16_t reel_pos_index = 21; // todo: don't hard-code this
 
     switch (mcbComm.binary_rx.bin_id) {
@@ -161,7 +161,8 @@ void StratoRatchuts::HandleMCBString()
     switch (mcbComm.string_rx.str_id) {
     case MCB_ERROR:
         if (mcbComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
-            ZephyrLogCrit(log_array);
+            String msg = String("MCBString: ") + String(log_array);
+            SendMCBTM("MCBSTRING", CRIT, msg.c_str());
             inst_substate = MODE_ERROR;
         }
         break;

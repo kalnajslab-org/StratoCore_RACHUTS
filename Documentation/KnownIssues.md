@@ -262,16 +262,23 @@ StateMess2/3 are empty (omitted from the XML).
 | `RPUSTATUS` | `SendRPUSTATUS(json, source)` | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source (`LORA` / `FLM_CHECK_PU` / `FLM_REDOCK`), e.g. `FL, LORA` | — | `FINE` | RPU status as a JSON text string, **variable length** (received into a 512-byte buffer on RACHUTS). From `RPUPacket::toJSON()` (LoRa path) or the dock `RPU_STATUS` reply. The `RPUPacket` field set changes over time, so the length is not fixed — don't hard-code it. |
 | `RPUREPORT` | `SendRPUREPORT(packet_num)` (payload added in `HandlePUBin`, PURouter) | `Number of RPURecords: <n>` | `PU TM: <profile_id>.<packet_num>, <pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 38 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
-| _motion message_ (see below) | `SendMCBTM(flag, message)` | — | — | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
+| `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |
 | `RATCHUTSEEPROM` | `SendPIBEEPROM()` | — | — | `FINE` | PIB/RACHUTS EEPROM dump (`pibConfigs.Bufferize` into the MCB binary RX buffer, `bin_length` B). |
 | `RATCHUTSTCACK` | `TCHandler()` (post-switch, RATS-style) | command summary (`msg2`), e.g. `Set dock_amount: 5.00`, `Sent go-measure to RPU: duration=130 rate=1` | detail/error (`msg3`), e.g. `Switch to manual mode before commanding motion` (empty on success) | `msg1_flag`: `FINE` ok / `WARN` rejected-or-error / `CRIT` unknown TC | none — sent once per received telecommand as the instrument-level ack. |
 
-**`SendMCBTM` messages** (the StateMess1 value, set by the caller): `Finished
-profile reel out`, `Finished profile reel in`, `Finished commanded manual
-motion`, `MCB Motion took longer than expected` (CRIT), `Unknown motion finished
-in profile monitor` (CRIT), `MCB dock detected: ...`, `MCB Fault: ...`, and the
-MCBRouter-built `log_array` strings.
+**`SendMCBTM` tags** (StateMess1) and where they come from:
+- `MCBACK` — MCB command acks (config/limit acks, low power) from `HandleMCBAck`.
+- `MCBASCII` — MCB motion faults / dock-detect from `HandleMCBASCII`.
+- `MCBREPORT` — motion status from the flight state machines (`Finished profile
+  reel out/in`, `Finished commanded manual motion`, `MCB Motion took longer than
+  expected` (CRIT), `Unknown motion finished in profile monitor` (CRIT)).
+- `MCBSTRING` — MCB error strings from `HandleMCBString` (`MCBString: <err>`,
+  CRIT); also sets `MODE_ERROR`.
+
+The message text is in StateMess2 and the current reel position in StateMess3.
+`MCB_MOTION_FINISHED` and the reel-motion-start acks stay internal logs (the
+state machine emits the `MCBREPORT`).
 
 **Resends (not distinct TM types):** `Flight_ManualMotion` (ST after a motion TM)
 and `Flight_PUOffload` (`ST_TM_ACK`) call `ZephyrTXpoke(ZEPHYRTX_TM)` to

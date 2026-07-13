@@ -346,21 +346,25 @@ void StratoRatchuts::NoteProfileStart()
 
 }
 
-void StratoRatchuts::SendMCBTM(StateFlag_t state_flag, const char * message)
+void StratoRatchuts::SendMCBTM(const char * TMname, StateFlag_t state_flag, const char * message)
 {
-    // use only the first flag to report the motion
-    zephyrTX.addTm(MCB_TM_buffer,MCB_TM_buffer_idx);
-    zephyrTX.setStateDetails(1, message);
-    zephyrTX.setStateDetails(2, "");
-    zephyrTX.setStateDetails(3, "");
+    zephyrTX.clearTm();
+    zephyrTX.addTm(MCB_TM_buffer, MCB_TM_buffer_idx);
+
+    // StateMess1 = category tag (MCBACK/MCBASCII/MCBREPORT/MCBSTRING), StateMess2
+    // = message, StateMess3 = current reel position.
+    zephyrTX.setStateDetails(1, TMname);
     zephyrTX.setStateFlagValue(1, state_flag);
-    zephyrTX.setStateFlagValue(2, NOMESS);
-    zephyrTX.setStateFlagValue(3, NOMESS);
+
+    zephyrTX.setStateDetails(2, message);
+    zephyrTX.setStateFlagValue(2, FINE);
+
+    zephyrTX.setStateDetails(3, (String("Reel: ") + String(reel_pos, 2)).c_str());
+    zephyrTX.setStateFlagValue(3, FINE);
 
     TM_ack_flag = NO_ACK;
     ZephyrTXpoke(ZEPHYRTX_TM);
 
-    //log_nominal(log_array);
     MCB_TM_buffer_idx = 0;
     if (!WriteFileTM("MCB")) {
         log_error("Unable to write MCB TM to SD file");

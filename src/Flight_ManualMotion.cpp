@@ -99,14 +99,14 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
         }
 
         if (CheckAction(ACTION_MOTION_TIMEOUT)) {
-            SendMCBTM(CRIT, "MCB Motion took longer than expected");
+            SendMCBTM("MCBREPORT", CRIT, "MCB Motion took longer than expected");
             mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;
         }
 
         if (!mcb_motion_ongoing) {
-            SendMCBTM(FINE, "Finished commanded manual motion");
+            SendMCBTM("MCBREPORT", FINE, "Finished commanded manual motion");
             manualmotion_state = ST_TM_ACK;
             scheduler.AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT);
         }
