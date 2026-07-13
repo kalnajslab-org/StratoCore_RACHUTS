@@ -287,9 +287,9 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         msg2 = "Set motion_timeout: " + String(pibConfigs.motion_timeout.Read());
         break;
     case GETPIBEEPROM:
-        msg2 = "TC Get PIB EEPROM";
+        msg2 = "TC Get RATCHuTS EEPROM";
         if (mcb_motion_ongoing) {
-            msg3 = "Motion ongoing, request PIB EEPROM later";
+            msg3 = "Motion ongoing, request RATCHuTS EEPROM later";
             msg1_flag = WARN;
         } else {
             send_pib_eeprom = true;
