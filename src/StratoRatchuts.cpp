@@ -375,7 +375,7 @@ void StratoRatchuts::SendMCBEEPROM()
     zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
 
     // use only the first flag to preface the contents
-    zephyrTX.setStateDetails(1, "MCB EEPROM Contents");
+    zephyrTX.setStateDetails(1, "MCBEEPROM");
     zephyrTX.setStateDetails(2, "");
     zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, FINE);
