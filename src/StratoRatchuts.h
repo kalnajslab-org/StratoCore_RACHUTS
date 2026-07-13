@@ -164,9 +164,9 @@ private:
     bool TCHandler(Telecommand_t telecommand);
 
     // Guard for manual-only TCs: returns true if in manual flight mode,
-    // otherwise sends a ZephyrLogWarn naming the command + required mode and
-    // returns false (so the caller can break out without acting).
-    bool RequireManualFlight(const char * cmd);
+    // otherwise sets the TC-ack detail (msg3) + flag naming the command and the
+    // required mode, and returns false (so the caller can break out).
+    bool RequireManualFlight(const char * cmd, String & msg3, StateFlag_t & flag);
 
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);

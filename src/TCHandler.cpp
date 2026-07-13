@@ -9,17 +9,18 @@
 #include "StratoRatchuts.h"
 
 // Guard for manual-only TCs. mode_code is set at the top of each mode function,
-// so it reflects the current StratoCore mode when a TC is handled.
-bool StratoRatchuts::RequireManualFlight(const char * cmd)
+// so it reflects the current StratoCore mode when a TC is handled. On failure it
+// populates the TC-ack detail (msg3) and flag rather than logging directly.
+bool StratoRatchuts::RequireManualFlight(const char * cmd, String & msg3, StateFlag_t & flag)
 {
     if (0 != strcmp(mode_code, "FL")) {
-        snprintf(log_array, LOG_ARRAY_SIZE, "%s ignored: not in flight mode", cmd);
-        ZephyrLogWarn(log_array);
+        msg3 = String(cmd) + " ignored: not in flight mode";
+        flag = WARN;
         return false;
     }
     if (autonomous_mode) {
-        snprintf(log_array, LOG_ARRAY_SIZE, "%s ignored: switch to manual mode", cmd);
-        ZephyrLogWarn(log_array);
+        msg3 = String(cmd) + " ignored: switch to manual mode";
+        flag = WARN;
         return false;
     }
     return true;
@@ -28,104 +29,137 @@ bool StratoRatchuts::RequireManualFlight(const char * cmd)
 // The telecommand handler must return ACK/NAK
 bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 {
-    String dbg_msg = "";
-    log_debug("Received telecommand");
+    // TC acknowledgement summary (sent as a RATCHUTSTCACK TM after the switch):
+    // msg2 = command summary, msg3 = detail/error, msg1_flag = FINE/WARN/CRIT.
+    String msg2("");
+    String msg3("");
+    StateFlag_t msg1_flag = FINE;
+
+    // Deferred actions that send their own TM (run after the ack TM).
+    bool send_pib_eeprom = false;
 
     switch (telecommand) {
 
     // MCB Telecommands -----------------------------------
     case DEPLOYx:
+        msg2 = "TC Deploy Length";
         if (autonomous_mode) {
-            ZephyrLogWarn("Switch to manual mode before commanding motion");
-            break;
+            msg3 = "Switch to manual mode before commanding motion";
+            msg1_flag = WARN;
+        } else {
+            deploy_length = mcbParam.deployLen;
+            msg2 += ": " + String(deploy_length, 1) + " revs";
+            SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
         }
-        deploy_length = mcbParam.deployLen;
-        SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
         break;
     case DEPLOYv:
         pibConfigs.deploy_velocity.Write(mcbParam.deployVel);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set deploy_velocity: %f", pibConfigs.deploy_velocity.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set deploy_velocity: " + String(pibConfigs.deploy_velocity.Read(), 2);
         break;
     case DEPLOYa:
+        msg2 = "TC Deploy Acceleration: " + String(mcbParam.deployAcc, 2);
         if (!mcbComm.TX_Out_Acc(mcbParam.deployAcc)) {
-            ZephyrLogWarn("Error sending deploy acc to MCB");
+            msg3 = "Error sending deploy acc to MCB";
+            msg1_flag = WARN;
         }
         break;
     case RETRACTx:
+        msg2 = "TC Retract Length";
         if (autonomous_mode) {
-            ZephyrLogWarn("Switch to manual mode before commanding motion");
-            break;
+            msg3 = "Switch to manual mode before commanding motion";
+            msg1_flag = WARN;
+        } else {
+            retract_length = mcbParam.retractLen;
+            msg2 += ": " + String(retract_length, 1) + " revs";
+            SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
         }
-        retract_length = mcbParam.retractLen;
-        SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
         break;
     case RETRACTv:
         pibConfigs.retract_velocity.Write(mcbParam.retractVel);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set retract_velocity: %f", pibConfigs.retract_velocity.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set retract_velocity: " + String(pibConfigs.retract_velocity.Read(), 2);
         break;
     case RETRACTa:
+        msg2 = "TC Retract Acceleration: " + String(mcbParam.retractAcc, 2);
         if (!mcbComm.TX_In_Acc(mcbParam.retractAcc)) {
-            ZephyrLogWarn("Error sending retract acc to MCB");
+            msg3 = "Error sending retract acc to MCB";
+            msg1_flag = WARN;
         }
         break;
     case DOCKx:
+        msg2 = "TC Dock Length";
         if (autonomous_mode) {
-            ZephyrLogWarn("Switch to manual mode before commanding motion");
-            break;
+            msg3 = "Switch to manual mode before commanding motion";
+            msg1_flag = WARN;
+        } else {
+            dock_length = mcbParam.dockLen;
+            msg2 += ": " + String(dock_length, 1) + " revs";
+            SetAction(ACTION_DOCK); // will be ignored if wrong mode
         }
-        dock_length = mcbParam.dockLen;
-        SetAction(ACTION_DOCK); // will be ignored if wrong mode
         break;
     case DOCKv:
         pibConfigs.dock_velocity.Write(mcbParam.dockVel);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set dock_velocity: %f", pibConfigs.dock_velocity.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set dock_velocity: " + String(pibConfigs.dock_velocity.Read(), 2);
         break;
     case DOCKa:
+        msg2 = "TC Dock Acceleration: " + String(mcbParam.dockAcc, 2);
         if (!mcbComm.TX_Dock_Acc(mcbParam.dockAcc)) {
-            ZephyrLogWarn("Error sending dock acc to MCB");
+            msg3 = "Error sending dock acc to MCB";
+            msg1_flag = WARN;
         }
         break;
     case FULLRETRACT:
         // todo: determine implementation
+        msg2 = "TC Full Retract";
+        msg3 = "TC Full Retract not implemented";
+        msg1_flag = WARN;
         break;
     case CANCELMOTION:
+        msg2 = "TC Cancel Motion";
         mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(ACTION_MOTION_STOP);
         break;
     case ZEROREEL:
+        msg2 = "TC Zero Reel";
         if (mcb_dock_ongoing) {
-            ZephyrLogWarn("Can't zero reel, motion ongoing");
+            msg3 = "Can't zero reel, motion ongoing";
+            msg1_flag = WARN;
         }
-
         mcbComm.TX_ASCII(MCB_ZERO_REEL);
         break;
     case TEMPLIMITS:
+        msg2 = "TC Set Temperature Limits";
         if (!mcbComm.TX_Temp_Limits(mcbParam.tempLimits[0],mcbParam.tempLimits[1],mcbParam.tempLimits[2],mcbParam.tempLimits[3],mcbParam.tempLimits[4],mcbParam.tempLimits[5])) {
-            ZephyrLogWarn("Error sending temperature limits to MCB");
+            msg3 = "Error sending temperature limits to MCB";
+            msg1_flag = WARN;
         }
         break;
     case TORQUELIMITS:
+        msg2 = "TC Set Torque Limits";
         if (!mcbComm.TX_Torque_Limits(mcbParam.torqueLimits[0],mcbParam.torqueLimits[1])) {
-            ZephyrLogWarn("Error sending torque limits to MCB");
+            msg3 = "Error sending torque limits to MCB";
+            msg1_flag = WARN;
         }
         break;
     case CURRLIMITS:
+        msg2 = "TC Set Current Limits";
         if (!mcbComm.TX_Curr_Limits(mcbParam.currLimits[0],mcbParam.currLimits[1])) {
-            ZephyrLogWarn("Error sending curr limits to MCB");
+            msg3 = "Error sending curr limits to MCB";
+            msg1_flag = WARN;
         }
         break;
     case IGNORELIMITS:
+        msg2 = "TC Ignore Limits";
         mcbComm.TX_ASCII(MCB_IGNORE_LIMITS);
         break;
     case USELIMITS:
+        msg2 = "TC Use Limits";
         mcbComm.TX_ASCII(MCB_USE_LIMITS);
         break;
     case GETMCBEEPROM:
+        msg2 = "TC Get MCB EEPROM";
         if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Motion ongoing, request MCB EEPROM later");
+            msg3 = "Motion ongoing, request MCB EEPROM later";
+            msg1_flag = WARN;
         } else {
             mcbComm.TX_ASCII(MCB_GET_EEPROM);
         }
@@ -133,189 +167,168 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 
     // PIB Telecommands -----------------------------------
     case SETAUTO:
+        msg2 = "TC Set Auto Mode";
         if (!mcb_motion_ongoing) {
             autonomous_mode = true;
             inst_substate = MODE_ENTRY; // restart FL in auto
-            ZephyrLogFine("Set mode to auto");
         } else {
-            ZephyrLogWarn("Motion ongoing, can't update mode");
+            msg3 = "Motion ongoing, can't update mode";
+            msg1_flag = WARN;
         }
         break;
     case SETMANUAL:
+        msg2 = "TC Set Manual Mode";
         if (!mcb_motion_ongoing) {
             autonomous_mode = false;
             inst_substate = MODE_ENTRY; // restart FL in manual
-            ZephyrLogFine("Set mode to manual");
         } else {
-            ZephyrLogWarn("Motion ongoing, can't update mode");
+            msg3 = "Motion ongoing, can't update mode";
+            msg1_flag = WARN;
         }
         break;
     case SETSZAMIN:
         pibConfigs.sza_minimum.Write(pibParam.szaMinimum);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set sza_minimum: %f", pibConfigs.sza_minimum.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set sza_minimum: " + String(pibConfigs.sza_minimum.Read(), 2);
         break;
     case SETPROFILESIZE:
         pibConfigs.profile_size.Write(pibParam.profileSize);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set profile_size: %f", pibConfigs.profile_size.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set profile_size: " + String(pibConfigs.profile_size.Read(), 2);
         break;
     case SETDOCKAMOUNT:
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set dock_amount: %f", pibConfigs.dock_amount.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set dock_amount: " + String(pibConfigs.dock_amount.Read(), 2);
         break;
     case SETDWELLTIME:
         pibConfigs.dwell_time.Write(pibParam.dwellTime);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set dwell_time: %u", pibConfigs.dwell_time.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set dwell_time: " + String(pibConfigs.dwell_time.Read());
         break;
     case SETPROFILEPERIOD:
         pibConfigs.profile_period.Write(pibParam.profilePeriod);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set profile_period: %u", pibConfigs.profile_period.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set profile_period: " + String(pibConfigs.profile_period.Read());
         break;
     case SETNUMPROFILES:
         pibConfigs.num_profiles.Write(pibParam.numProfiles);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set num_profiles: %u", pibConfigs.num_profiles.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set num_profiles: " + String(pibConfigs.num_profiles.Read());
         break;
     case SETTIMETRIGGER:
+        msg2 = "TC Set Time Trigger";
         if ((uint32_t) now() > pibParam.timeTrigger) {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Can't use time trigger in past: %lu is less than %lu", pibParam.timeTrigger, (uint32_t) now());
-            ZephyrLogWarn(log_array);
-            break;
+            msg3 = "Can't use time trigger in past: " + String(pibParam.timeTrigger) + " < " + String((uint32_t) now());
+            msg1_flag = WARN;
+        } else {
+            pibConfigs.time_trigger.Write(pibParam.timeTrigger);
+            msg2 = "Set time_trigger: " + String(pibConfigs.time_trigger.Read());
+            profiles_remaining = pibConfigs.num_profiles.Read();
         }
-        pibConfigs.time_trigger.Write(pibParam.timeTrigger);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set time_trigger: %lu", pibConfigs.time_trigger.Read());
-        ZephyrLogFine(log_array);
-        profiles_remaining = pibConfigs.num_profiles.Read();
         break;
     case USESZATRIGGER:
         pibConfigs.sza_trigger.Write(true);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set sza_trigger: %u", pibConfigs.sza_trigger.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set sza_trigger: " + String(pibConfigs.sza_trigger.Read());
         break;
     case USETIMETRIGGER:
         pibConfigs.sza_trigger.Write(false);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set sza_trigger: %u", pibConfigs.sza_trigger.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set sza_trigger: " + String(pibConfigs.sza_trigger.Read());
         break;
     case SETDOCKOVERSHOOT:
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set dock_overshoot: %f", pibConfigs.dock_overshoot.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set dock_overshoot: " + String(pibConfigs.dock_overshoot.Read(), 2);
         break;
     case RETRYDOCK:
-        if (!RequireManualFlight("Retry dock")) break;
-        log_nominal("Received retry dock telecommand");
-
-        // schedule each action
+        msg2 = "TC Retry Dock";
+        if (!RequireManualFlight("Retry dock", msg3, msg1_flag)) break;
         SetAction(COMMAND_REDOCK);
-
-        // set the parameters
         deploy_length = mcbParam.deployLen;
         retract_length = mcbParam.retractLen;
         break;
     case GETPUSTATUS:
-        if (!RequireManualFlight("Get PU status")) break;
-        log_nominal("Received get PU status TC");
-
+        msg2 = "TC Get PU Status";
+        if (!RequireManualFlight("Get PU status", msg3, msg1_flag)) break;
         SetAction(ACTION_CHECK_PU);
         break;
     case PUPOWERON:
+        msg2 = "PU powered on";
         digitalWrite(PU_PWR_ENABLE, HIGH);
-        ZephyrLogFine("PU powered on");
         break;
     case PUPOWEROFF:
+        msg2 = "PU powered off";
         digitalWrite(PU_PWR_ENABLE, LOW);
-        ZephyrLogFine("PU powered off");
         break;
     case MANUALPROFILE:
-        if (!RequireManualFlight("Manual profile")) break;
-        log_nominal("Received manual profile telecommand");
-
+        msg2 = "TC Manual Profile";
+        if (!RequireManualFlight("Manual profile", msg3, msg1_flag)) break;
         pibConfigs.profile_size.Write(pibParam.profileSize);
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
         pibConfigs.dwell_time.Write(pibParam.dwellTime);
-
-        // schedule each action
         SetAction(COMMAND_MANUAL_PROFILE);
         break;
     case OFFLOADPUPROFILE:
-        if (!RequireManualFlight("PU profile offload")) break;
-        log_nominal("Received offload PU profile TC");
-
+        msg2 = "TC Offload PU Profile";
+        if (!RequireManualFlight("PU profile offload", msg3, msg1_flag)) break;
         SetAction(ACTION_OFFLOAD_PU);
         break;
     case SETPREPROFILETIME:
         pibConfigs.preprofile_time.Write(pibParam.preprofileTime);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set preprofile_time: %u", pibConfigs.preprofile_time.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set preprofile_time: " + String(pibConfigs.preprofile_time.Read());
         break;
     case SETPUWARMUPTIME:
         pibConfigs.puwarmup_time.Write(pibParam.warmupTime);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set puwarmup_time: %u", pibConfigs.puwarmup_time.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set puwarmup_time: " + String(pibConfigs.puwarmup_time.Read());
         break;
     case AUTOREDOCKPARAMS:
         pibConfigs.redock_out.Write(pibParam.autoRedockOut);
         pibConfigs.redock_in.Write(pibParam.autoRedockIn);
         pibConfigs.num_redock.Write(pibParam.numRedock);
-        snprintf(log_array, LOG_ARRAY_SIZE, "New auto redock params: %0.2f, %0.2f, %u", pibConfigs.redock_out.Read(),
-                 pibConfigs.redock_in.Read(), pibConfigs.num_redock.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "New auto redock params: " + String(pibConfigs.redock_out.Read(), 2) + ", "
+             + String(pibConfigs.redock_in.Read(), 2) + ", " + String(pibConfigs.num_redock.Read());
         break;
     case SETMOTIONTIMEOUT:
         pibConfigs.motion_timeout.Write(pibParam.motionTimeout);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set motion_timeout: %u", pibConfigs.motion_timeout.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set motion_timeout: " + String(pibConfigs.motion_timeout.Read());
         break;
     case GETPIBEEPROM:
+        msg2 = "TC Get PIB EEPROM";
         if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Motion ongoing, request PIB EEPROM later");
+            msg3 = "Motion ongoing, request PIB EEPROM later";
+            msg1_flag = WARN;
         } else {
-            SendPIBEEPROM();
+            send_pib_eeprom = true;
         }
         break;
     case DOCKEDPROFILE:
-        if (!RequireManualFlight("Docked profile")) break;
-        log_nominal("Received docked profile telecommand");
-
-        // set the duration
+        msg2 = "TC Docked Profile";
+        if (!RequireManualFlight("Docked profile", msg3, msg1_flag)) break;
         docked_profile_time = pibParam.dockedProfileTime;
-
-        // schedule each action
         SetAction(COMMAND_DOCKED_PROFILE);
         break;
     case STARTREALTIMEMCB:
+        msg2 = "TC Start Real-Time MCB";
         if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Cannot start real-time MCB mode, motion ongoing");
+            msg3 = "Cannot start real-time MCB mode, motion ongoing";
+            msg1_flag = WARN;
         } else {
             pibConfigs.real_time_mcb.Write(true);
-            ZephyrLogFine("Started real-time MCB mode");
         }
         break;
     case EXITREALTIMEMCB:
+        msg2 = "TC Exit Real-Time MCB";
         if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Cannot exit real-time MCB mode, motion ongoing");
+            msg3 = "Cannot exit real-time MCB mode, motion ongoing";
+            msg1_flag = WARN;
         } else {
             pibConfigs.real_time_mcb.Write(false);
-            ZephyrLogFine("Exited real-time MCB mode");
         }
         break;
 
     // PU Telecommands ------------------------------------
     case RPUBATTEMP:
         pibConfigs.rpu_bat_temp.Write(rpuParam.batTemp);
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set rpu_bat_temp: %0.2f", pibConfigs.rpu_bat_temp.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set rpu_bat_temp: " + String(pibConfigs.rpu_bat_temp.Read(), 2);
         break;
     case RPURESET:
+        msg2 = "TC RPU Reset";
         puComm.TX_ASCII(RPU_RESET);
         break;
-
     case RPUCONFIG:
         pibConfigs.rpu_meas_duration.Write(rpuParam.measDurationSecs);
         pibConfigs.rpu_meas_rate.Write(rpuParam.measRateSecs);
@@ -323,22 +336,21 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         pibConfigs.rpu_enable_TDLAS.Write(rpuParam.enableTDLAS);
         pibConfigs.rpu_enable_TSEN.Write(rpuParam.enableTSEN);
         pibConfigs.rpu_enable_RS41.Write(rpuParam.enableRS41);
-        snprintf(log_array, LOG_ARRAY_SIZE, "RPU config: duration=%u rate=%u ROPC=%u TDLAS=%u TSEN=%u RS41=%u",
-                 pibConfigs.rpu_meas_duration.Read(), pibConfigs.rpu_meas_rate.Read(), pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
-                 pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "RPU config: duration=" + String(pibConfigs.rpu_meas_duration.Read())
+             + " rate=" + String(pibConfigs.rpu_meas_rate.Read())
+             + " ROPC=" + String(pibConfigs.rpu_enable_ROPC.Read())
+             + " TDLAS=" + String(pibConfigs.rpu_enable_TDLAS.Read())
+             + " TSEN=" + String(pibConfigs.rpu_enable_TSEN.Read())
+             + " RS41=" + String(pibConfigs.rpu_enable_RS41.Read());
         break;
-
     case RPUSTATUSPERIOD:
         pibConfigs.rpu_status_rate.Write(rpuParam.statusPeriodSecs);
         puComm.TX_SetStatusRate(pibConfigs.rpu_status_rate.Read());
-        snprintf(log_array, LOG_ARRAY_SIZE, "Set rpu_status_rate: %u", pibConfigs.rpu_status_rate.Read());
-        ZephyrLogFine(log_array);
+        msg2 = "Set rpu_status_rate: " + String(pibConfigs.rpu_status_rate.Read());
         break;
-
     case RPUGOSTANDBY:
+        msg2 = "Sent go-standby to RPU";
         puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read());
-        ZephyrLogFine("Sent go-standby to RPU");
         break;
     case RPUGOMEASURE:
         // Duration and rate come from the TC parameters; battery setpoint and
@@ -348,23 +360,54 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
                             pibConfigs.rpu_bat_temp.Read(),
                             pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
                             pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
-        snprintf(log_array, LOG_ARRAY_SIZE, "Sent go-measure to RPU: duration=%u rate=%u",
-                 rpuParam.measDurationSecs, rpuParam.measRateSecs);
-        ZephyrLogFine(log_array);
+        msg2 = "Sent go-measure to RPU: duration=" + String(rpuParam.measDurationSecs)
+             + " rate=" + String(rpuParam.measRateSecs);
         break;
 
     // General Telecommands -------------------------------
     // note that RESET_INST and GETTMBUFFER are implemented in StratoCore
     case EXITERROR:
+        msg2 = "TC Exit Error";
         SetAction(EXIT_ERROR_STATE);
-        ZephyrLogFine("Received exit error command");
         break;
 
     // Error case -----------------------------------------
     default:
-        snprintf(log_array, LOG_ARRAY_SIZE, "Unknown TC ID: %u", telecommand);
-        ZephyrLogWarn(log_array);
+        msg1_flag = CRIT;
+        msg3 = "Unknown TC " + String(telecommand) + " received";
         break;
+    }
+
+    // Send a TC acknowledgement TM
+    zephyrTX.clearTm();
+    zephyrTX.setStateDetails(1, "RATCHUTSTCACK");
+    zephyrTX.setStateFlagValue(1, msg1_flag);
+
+    zephyrTX.setStateDetails(2, msg2);
+    zephyrTX.setStateFlagValue(2, FINE);
+
+    zephyrTX.setStateDetails(3, msg3);
+    zephyrTX.setStateFlagValue(3, FINE);
+
+    TM_ack_flag = NO_ACK;
+    ZephyrTXpoke(ZEPHYRTX_TM);
+
+    // Log the TC summary message
+    switch (msg1_flag) {
+    case FINE:
+        log_nominal(msg2.c_str());
+        break;
+    case WARN:
+    case CRIT:
+        log_error(msg2.c_str());
+        break;
+    default:
+        log_debug(msg2.c_str());
+    }
+
+    // Deferred actions that send their own TM (run after the ack TM)
+    if (send_pib_eeprom) {
+        SendPIBEEPROM();
     }
 
     return true;

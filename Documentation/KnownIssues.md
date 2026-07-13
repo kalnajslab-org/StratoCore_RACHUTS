@@ -265,6 +265,7 @@ StateMess2/3 are empty (omitted from the XML).
 | _motion message_ (see below) | `SendMCBTM(flag, message)` | — | — | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |
 | `RATCHUTSEEPROM` | `SendPIBEEPROM()` | — | — | `FINE` | PIB/RACHUTS EEPROM dump (`pibConfigs.Bufferize` into the MCB binary RX buffer, `bin_length` B). |
+| `RATCHUTSTCACK` | `TCHandler()` (post-switch, RATS-style) | command summary (`msg2`), e.g. `Set dock_amount: 5.00`, `Sent go-measure to RPU: duration=130 rate=1` | detail/error (`msg3`), e.g. `Switch to manual mode before commanding motion` (empty on success) | `msg1_flag`: `FINE` ok / `WARN` rejected-or-error / `CRIT` unknown TC | none — sent once per received telecommand as the instrument-level ack. |
 
 **`SendMCBTM` messages** (the StateMess1 value, set by the caller): `Finished
 profile reel out`, `Finished profile reel in`, `Finished commanded manual
