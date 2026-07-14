@@ -130,10 +130,10 @@ void StratoRatchuts::SendRPUSTATUS(const String& json, const String& source)
 
     zephyrTX.setStateDetails(1, "RPUSTATUS");
     zephyrTX.setStateDetails(2, log_array);
-    zephyrTX.setStateDetails(3, "");
+    zephyrTX.setStateDetails(3, (String("Reel: ") + String(reel_pos, 2)).c_str());
     zephyrTX.setStateFlagValue(1, FINE);
-    zephyrTX.setStateFlagValue(2, NOMESS);
-    zephyrTX.setStateFlagValue(3, NOMESS);
+    zephyrTX.setStateFlagValue(2, FINE);
+    zephyrTX.setStateFlagValue(3, FINE);
 
     zephyrTX.addTm((const uint8_t*)json.c_str(), json.length());
 
@@ -441,8 +441,8 @@ void StratoRatchuts::SendRPUREPORT(uint8_t packet_num)
         zephyrTX.setStateFlagValue(1, WARN);
     }
 
-    zephyrTX.setStateFlagValue(2, NOMESS);
-    zephyrTX.setStateFlagValue(3, NOMESS);
+    zephyrTX.setStateFlagValue(2, FINE);
+    zephyrTX.setStateFlagValue(3, FINE);
 
     TM_ack_flag = NO_ACK;
     ZephyrTXpoke(ZEPHYRTX_TM);

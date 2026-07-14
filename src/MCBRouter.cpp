@@ -85,6 +85,9 @@ void StratoRatchuts::HandleMCBAck()
         SendMCBTM("MCBACK", FINE, "MCB in low power");
         mcb_low_power = true;
         break;
+    case MCB_CANCEL_MOTION:
+        SendMCBTM("MCBACK", FINE, "MCB acked cancel motion");
+        break;
     case MCB_REEL_IN:
         if (MOTION_REEL_IN == mcb_motion) NoteProfileStart();
         break;

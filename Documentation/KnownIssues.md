@@ -248,6 +248,31 @@ timeouts. Removed; the USB `Serial.println(json)` was kept.
 
 ---
 
+## 11. Manual-only TCs silently no-op in the flight error state (RACHUTS) — **OPEN (fix planned)**
+
+The manual-only TCs (RETRYDOCK 142, GETPUSTATUS 143, MANUALPROFILE 146,
+OFFLOADPUPROFILE 147, DOCKEDPROFILE 153) just `SetAction(...)`; the action is
+only *consumed* in `ManualFlight`'s `FLM_IDLE`. `RequireManualFlight` only checks
+`mode_code == "FL"` and `!autonomous_mode` — both of which are still true when
+the instrument is parked in the flight **error loop** (`FL_ERROR_LOOP`,
+substate 14). So in the error state these TCs pass the guard, set an action that
+`FLM_IDLE` never runs, and silently expire (`WatchFlags` clears it after 3 loops)
+— no warning.
+
+**Symptom:** after a profile/MCB fault drops RACHUTS to `MODE_ERROR` →
+`FL_ERROR_LOOP`, TC 143 "gets no response" and TC 147 "returns no records," while
+LoRa `RPUSTATUS` TMs keep flowing (`LoRaRX()` runs every loop, mode-independent).
+`SENDSTATE` (TC 203) reports `mode: 1, substate: 14`.
+
+**Recovery today:** `EXITERROR` (TC 201) → back to `FLM_IDLE`, then the TCs work.
+
+**Planned fix:** add a `flight_error_state` member (set true in `FL_ERROR_LANDING`,
+cleared in `FL_ENTRY`) and reject in `RequireManualFlight` with a `WARN`
+(`"<cmd> ignored: in flight error state (send EXITERROR)"`) so the command warns
+instead of vanishing.
+
+---
+
 ## Appendix A — RACHUTS Telemetry (TM) catalog
 
 Every RACHUTS TM is a Zephyr/StrateoleXML telemetry message identified on the
@@ -259,7 +284,7 @@ StateMess2/3 are empty (omitted from the XML).
 
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
-| `RPUSTATUS` | `SendRPUSTATUS(json, source)` | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source (`LORA` / `FLM_CHECK_PU` / `FLM_REDOCK`), e.g. `FL, LORA` | — | `FINE` | RPU status as a JSON text string, **variable length** (received into a 512-byte buffer on RACHUTS). From `RPUPacket::toJSON()` (LoRa path) or the dock `RPU_STATUS` reply. The `RPUPacket` field set changes over time, so the length is not fixed — don't hard-code it. |
+| `RPUSTATUS` | `SendRPUSTATUS(json, source)` | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source (`LORA` / `FLM_CHECK_PU` / `FLM_REDOCK`), e.g. `FL, LORA` | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | RPU status as a JSON text string, **variable length** (received into a 512-byte buffer on RACHUTS). From `RPUPacket::toJSON()` (LoRa path) or the dock `RPU_STATUS` reply. The `RPUPacket` field set changes over time, so the length is not fixed — don't hard-code it. |
 | `RPUREPORT` | `SendRPUREPORT(packet_num)` (payload added in `HandlePUBin`, PURouter) | `Number of RPURecords: <n>` | `PU TM: <profile_id>.<packet_num>, <pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 38 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
