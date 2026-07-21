@@ -47,7 +47,7 @@ bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
                 profile_state = ST_GO_MEASURE;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("RPU not responding to go-measure command");
+                SendTextTM("RPU not responding to go-measure command", WARN);
                 return true;
             }
         }
@@ -55,7 +55,7 @@ bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
 
     case ST_MEASURE_WAIT:
         if (CheckAction(ACTION_END_PREPROFILE)) {
-            ZephyrLogFine("Finished docked profile");
+            SendTextTM("Finished docked profile", FINE);
             if (pibConfigs.pu_auto_offload.Read()) {
                 Serial.println("Begin Automatic PU Offload");
                 SetAction(ACTION_OFFLOAD_PU);

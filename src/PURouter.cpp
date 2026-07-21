@@ -50,18 +50,18 @@ void StratoRatchuts::HandlePUAck()
             log_nominal("RPU in measure");
             pu_measure = true;
         } else {
-            ZephyrLogWarn("RPU NAKed go-measure command");
+            SendTextTM("RPU NAKed go-measure command", WARN);
         }
         break;
     case RPU_GO_STANDBY:
         if (puComm.ack_value) {
             log_nominal("RPU in standby");
         } else {
-            ZephyrLogWarn("RPU NAKed go-standby command");
+            SendTextTM("RPU NAKed go-standby command", WARN);
         }
         break;
     case RPU_RESET:
-        ZephyrLogFine("RPU acked reset");
+        SendTextTM("RPU acked reset", FINE);
         break;
     case RPU_SET_STATUS_RATE:
         log_nominal("RPU acked status rate");
@@ -118,7 +118,7 @@ void StratoRatchuts::HandlePUString()
     switch (puComm.string_rx.str_id) {
     case RPU_ERROR:
         if (puComm.RX_Error(log_array, LOG_ARRAY_SIZE)) {
-            ZephyrLogCrit(log_array);
+            SendTextTM(log_array, CRIT);
             inst_substate = MODE_ERROR;
         }
         break;

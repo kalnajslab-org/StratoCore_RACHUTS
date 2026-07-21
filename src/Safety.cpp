@@ -73,7 +73,7 @@ void StratoRatchuts::SafetyMode()
             inst_substate = SA_VERIFY_DOCK;
             scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
         } else {
-            ZephyrLogWarn("Motion start error");
+            SendTextTM("Motion start error", WARN);
             inst_substate = MODE_ERROR;
         }
         break;

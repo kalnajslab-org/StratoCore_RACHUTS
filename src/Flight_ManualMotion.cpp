@@ -42,14 +42,14 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
             log_nominal("RA ACK");
         } else if (NAK == RA_ack_flag) {
             resend_attempted = false;
-            ZephyrLogWarn("Cannot perform motion, RA NAK");
+            SendTextTM("Cannot perform motion, RA NAK", WARN);
             return true;
         } else if (CheckAction(RESEND_RA)) {
             if (!resend_attempted) {
                 resend_attempted = true;
                 manualmotion_state = ST_SEND_RA;
             } else {
-                ZephyrLogWarn("Never received RAAck");
+                SendTextTM("Never received RAAck", WARN);
                 resend_attempted = false;
                 return true;
             }
@@ -58,7 +58,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
 
     case ST_START_MOTION:
         if (mcb_motion_ongoing) {
-            ZephyrLogWarn("Motion commanded while motion ongoing");
+            SendTextTM("Motion commanded while motion ongoing", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
         }
 
@@ -66,7 +66,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
             manualmotion_state = ST_VERIFY_MOTION;
             scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
         } else {
-            ZephyrLogWarn("Motion start error");
+            SendTextTM("Motion start error", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
         }
         break;
@@ -84,7 +84,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
                 manualmotion_state = ST_START_MOTION;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("MCB never confirmed motion");
+                SendTextTM("MCB never confirmed motion", WARN);
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             }
         }
@@ -93,7 +93,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
     case ST_MONITOR_MOTION:
         if (CheckAction(ACTION_MOTION_STOP)) {
             // todo: verification of motion stop
-            ZephyrLogFine("Commanded motion stop");
+            SendTextTM("Commanded motion stop", FINE);
             return true;
             break;
         }

@@ -62,7 +62,7 @@ void StratoRatchuts::InstrumentSetup()
     LoRa.receive();
 
     if (!pibConfigs.Initialize()) {
-        ZephyrLogWarn("Error loading from EEPROM! Reconfigured");
+        SendTextTM("Error loading from EEPROM, reloaded default configuration", WARN);
     }
 
     mcbComm.AssignBinaryRXBuffer(binary_mcb, MCB_BUFFER_SIZE);
@@ -78,7 +78,7 @@ void StratoRatchuts::InstrumentLoop()
 void StratoRatchuts::LoRaInit()
 {
    if (!LoRa.begin(FREQUENCY)){
-       ZephyrLogWarn("Starting LoRa failed!");
+       SendTextTM("Starting LoRa failed!", WARN);
        Serial.println("WARN: LoRa Initializtion Failed");
     }
     delay(1);
@@ -139,6 +139,23 @@ void StratoRatchuts::SendRPUSTATUS(const String& json, const String& source)
 
     ZephyrTXpoke(ZEPHYRTX_TM);
     zephyrTX.clearTm();
+}
+
+// Text TM tagged "RATCHUTSTEXT" with the given StateFlag1. Replaces the base
+// ZephyrLog*(), which write the TM directly and so bypass the ZephyrTXpoke()
+// transceiver wake-up.
+void StratoRatchuts::SendTextTM(const char * message, StateFlag_t flag)
+{
+    zephyrTX.clearTm();
+    zephyrTX.setStateDetails(1, "RATCHUTSTEXT");
+    zephyrTX.setStateDetails(2, message);
+    zephyrTX.setStateDetails(3, (String("Reel: ") + String(reel_pos, 2)).c_str());
+    zephyrTX.setStateFlagValue(1, flag);
+    zephyrTX.setStateFlagValue(2, FINE);
+    zephyrTX.setStateFlagValue(3, FINE);
+    ZephyrTXpoke(ZEPHYRTX_TM);
+    zephyrTX.clearTm();
+    if (flag == FINE) log_nominal(message); else log_error(message);
 }
 
 // Wake the MAX3381 transceiver with a throwaway byte (absorbing the dropped
@@ -257,7 +274,7 @@ bool StratoRatchuts::StartMCBMotion()
     if (autonomous_mode) {
         log_nominal(log_array);
     } else {
-        ZephyrLogFine(log_array);
+        SendTextTM(log_array, FINE);
     }
 
     return success;
@@ -271,7 +288,7 @@ bool StratoRatchuts::ScheduleProfiles()
     // schedule the configured number of profiles starting in five seconds
     for (int i = 0; i < pibConfigs.num_profiles.Read(); i++) {
         if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pibConfigs.profile_period.Read() + 5)) {
-            ZephyrLogCrit("Error scheduling profiles, scheduler failure");
+            SendTextTM("Error scheduling profiles, scheduler failure", CRIT);
             return false;
         }
     }
@@ -279,7 +296,7 @@ bool StratoRatchuts::ScheduleProfiles()
     snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled profiles: %u, %0.2f, %0.2f, %0.2f, %u, %u", pibConfigs.num_profiles.Read(),
              pibConfigs.profile_size.Read(), pibConfigs.dock_amount.Read(), pibConfigs.dock_overshoot.Read(),
              pibConfigs.dwell_time.Read(), pibConfigs.profile_period.Read());
-    ZephyrLogFine(log_array);
+    SendTextTM(log_array, FINE);
     return true;
 }
 

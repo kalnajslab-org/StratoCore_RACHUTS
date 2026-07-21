@@ -54,7 +54,7 @@ bool StratoRatchuts::Flight_CheckPU(bool restart_state)
                 checkpu_state = ST_SEND_REQUEST;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("PU not responding to status request");
+                SendTextTM("PU not responding to status request", WARN);
                 return true;
             }
         }

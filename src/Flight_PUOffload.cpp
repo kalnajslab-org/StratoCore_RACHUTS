@@ -77,7 +77,7 @@ bool StratoRatchuts::Flight_PUOffload(bool restart_state)
                 puoffload_state = ST_REQUEST_PACKET;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("PU not successful in sending profile record");
+                SendTextTM("PU not successful in sending profile record", WARN);
                 return true;
             }
         }

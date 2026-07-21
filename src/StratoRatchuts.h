@@ -125,6 +125,11 @@ public:
     void LoRaInit();
     void SendRPUSTATUS(const String& json, const String& source);
 
+    // Send a text TM (StateMess1 = "RATCHUTSTEXT") with the given StateFlag1
+    // (FINE/WARN/CRIT). Unlike the base ZephyrLog*(), this routes through
+    // ZephyrTXpoke() so the transceiver is woken first, and it also logs locally.
+    void SendTextTM(const char * message, StateFlag_t flag);
+
     // Wake up the MAX3381 serial transceiver by sending a blank character to
     // ZEPHYR_SERIAL before calling the specified ZephyrTX member function. The
     // MAX3381 has a 30-second inactivity timeout, after which it powers down and

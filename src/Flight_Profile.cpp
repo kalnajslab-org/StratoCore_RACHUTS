@@ -52,7 +52,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
             resend_attempted = false;
             log_nominal("RA ACK");
         } else if (NAK == RA_ack_flag) {
-            ZephyrLogWarn("Cannot perform motion, RA NAK");
+            SendTextTM("Cannot perform motion, RA NAK", WARN);
             resend_attempted = false;
             return true;
         } else if (CheckAction(RESEND_RA)) {
@@ -60,7 +60,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 resend_attempted = true;
                 profile_state = ST_SEND_RA;
             } else {
-                ZephyrLogWarn("Never received RAAck");
+                SendTextTM("Never received RAAck", WARN);
                 resend_attempted = false;
                 return true;
             }
@@ -90,7 +90,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 profile_state = ST_SET_PU_PROFILE;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("RPU not responding to go-measure command");
+                SendTextTM("RPU not responding to go-measure command", WARN);
                 return true;
             }
         }
@@ -146,7 +146,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
             profile_state = ST_CONFIRM_MCB_LP;
         } else {
             if ((pibConfigs.num_redock.Read() + 1) == ++redock_count) {
-                ZephyrLogCrit("No dock! Exceeded allowable number of redock attempts");
+                SendTextTM("No dock! Exceeded allowable number of redock attempts", CRIT);
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             } else {
                 deploy_length = pibConfigs.redock_out.Read();
@@ -167,7 +167,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
     case ST_START_MOTION:
         log_debug("FLA start motion");
         if (mcb_motion_ongoing) { // set in MCBRouter when MCB acks motion command
-            ZephyrLogWarn("Motion commanded while motion ongoing");
+            SendTextTM("Motion commanded while motion ongoing", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
         }
 
@@ -175,7 +175,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
             profile_state = ST_VERIFY_MOTION;
             scheduler.AddAction(RESEND_MOTION_COMMAND, MCB_RESEND_TIMEOUT);
         } else {
-            ZephyrLogWarn("Motion start error");
+            SendTextTM("Motion start error", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
         }
         break;
@@ -194,7 +194,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 profile_state = ST_START_MOTION;
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("MCB never confirmed motion");
+                SendTextTM("MCB never confirmed motion", WARN);
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             }
         }
@@ -204,7 +204,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         log_debug("FLA monitor motion");
 
         if (CheckAction(ACTION_MOTION_STOP)) {
-            ZephyrLogWarn("Commanded motion stop in autonomous");
+            SendTextTM("Commanded motion stop in autonomous", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             break;
         }
@@ -226,7 +226,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                     log_nominal(log_array);
                     profile_state = ST_DWELL;
                 } else {
-                    ZephyrLogCrit("Unable to schedule dwell");
+                    SendTextTM("Unable to schedule dwell", CRIT);
                     inst_substate = MODE_ERROR; // will force exit of Flight_Profile
                 }
                 break;
@@ -268,7 +268,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
                 mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
             } else {
                 resend_attempted = false;
-                ZephyrLogWarn("MCB never powered off after profile");
+                SendTextTM("MCB never powered off after profile", WARN);
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             }
         }
