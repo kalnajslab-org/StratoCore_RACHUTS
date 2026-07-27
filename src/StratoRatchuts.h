@@ -123,7 +123,13 @@ public:
     void RunPURouter();
     void LoRaRX();
     void LoRaInit();
-    void SendRPUSTATUS(const String& json, const String& source);
+    // Build and send an RPUSTATUS TM: a "ratchuts" header (always present) plus
+    // an "rpu" block when rpu_block is non-empty. Records the transmission time.
+    void SendRPUSTATUS(const String& rpu_block, const String& source);
+
+    // Called every loop in SB/FL/SA/LP: if a full rpu_status_rate period has
+    // elapsed with no RPUSTATUS sent, transmit a header-only RPUSTATUS.
+    void SendPeriodicRPUSTATUS();
 
     // Send a text TM (StateMess1 = "RATCHUTSTEXT") with the given StateFlag1
     // (FINE/WARN/CRIT). Unlike the base ZephyrLog*(), this routes through
@@ -288,6 +294,15 @@ private:
     uint32_t pu_last_status = 0;        // RACHUTS-local time of last received RPU status
     String pu_status_json;              // raw JSON status string from RPU
     bool pu_status_received = false;    // set when a fresh RPU_STATUS is received, cleared by Flight_CheckPU
+
+    // RPUSTATUS reporting cadence (see SendPeriodicRPUSTATUS)
+    uint32_t last_rpustatus_ms = 0;     // millis() of last RPUSTATUS TM sent (any source)
+    uint32_t last_rpu_recv_ms = 0;      // millis() of last RPU status received (LoRa or dock)
+    bool rpu_ever_received = false;     // set once any RPU status has been received
+    String latest_rpu_json;             // most recent captured RPU status (LoRa or dock)
+    String latest_rpu_src;              // origin of latest_rpu_json ("LORA" / "DOCK")
+    bool rpu_status_pending = false;    // captured status not yet included in a report
+    bool force_rpustatus = false;       // request an immediate RPUSTATUS on the next mode loop
 
     uint8_t eeprom_buffer[256];
 

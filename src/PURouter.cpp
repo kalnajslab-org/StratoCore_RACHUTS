@@ -101,6 +101,11 @@ void StratoRatchuts::HandlePUBin()
             pu_status_json = json_buf;
             pu_last_status = now();
             pu_status_received = true;
+            latest_rpu_json = json_buf;
+            latest_rpu_src = "DOCK";
+            last_rpu_recv_ms = millis();
+            rpu_ever_received = true;
+            rpu_status_pending = true;
         } else {
             pu_status_json = "";
         }

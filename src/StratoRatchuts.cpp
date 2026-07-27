@@ -110,7 +110,14 @@ void StratoRatchuts::LoRaRX()
             }
             Serial.println();
 
-            SendRPUSTATUS(json_str, "LORA");
+            // Capture only -- the mode loops are the single RPUSTATUS sender and
+            // will incorporate this on their next reporting tick. Sending here
+            // (asynchronously, mid-loop) races the mode-loop TM and drops.
+            latest_rpu_json = json_str;
+            latest_rpu_src = "LORA";
+            last_rpu_recv_ms = millis();
+            rpu_ever_received = true;
+            rpu_status_pending = true;
         }
         else
         {
@@ -120,8 +127,12 @@ void StratoRatchuts::LoRaRX()
     return;
 }
 
-// Send the decoded RPU status (as JSON) to the ground as an RPUSTATUS TM
-void StratoRatchuts::SendRPUSTATUS(const String& json, const String& source)
+// Send an RPUSTATUS TM to the ground. The payload is a JSON object with a
+// "ratchuts" header (always present) and, when rpu_block is non-empty, an "rpu"
+// block carrying the decoded RPU status:
+//   {"ratchuts":{...}, "rpu":{...}}
+// A header-only report (empty rpu_block) means no RPU status was available.
+void StratoRatchuts::SendRPUSTATUS(const String& rpu_block, const String& source)
 {
     zephyrTX.clearTm();
 
@@ -135,10 +146,49 @@ void StratoRatchuts::SendRPUSTATUS(const String& json, const String& source)
     zephyrTX.setStateFlagValue(2, FINE);
     zephyrTX.setStateFlagValue(3, FINE);
 
-    zephyrTX.addTm((const uint8_t*)json.c_str(), json.length());
+    // Seconds since the last RPU status was received (-1 if never), so the ground
+    // can gauge staleness even on header-only reports.
+    int32_t rpu_age_s = rpu_ever_received ? (int32_t)((millis() - last_rpu_recv_ms) / 1000UL) : -1;
+
+    char header[192];
+    snprintf(header, sizeof(header),
+             "{\"ratchuts\":{\"mode\":\"%s\",\"substate\":%u,\"reel\":%.2f,\"src\":\"%s\",\"rpu_age_s\":%ld}",
+             mode_code, (unsigned)inst_substate, reel_pos, source.c_str(), (long)rpu_age_s);
+
+    String payload(header);
+    if (rpu_block.length() > 0) {
+        payload += ",\"rpu\":";
+        payload += rpu_block;
+        rpu_status_pending = false; // this status has now been reported
+    }
+    payload += "}";
+
+    zephyrTX.addTm((const uint8_t*)payload.c_str(), payload.length());
 
     ZephyrTXpoke(ZEPHYRTX_TM);
     zephyrTX.clearTm();
+
+    last_rpustatus_ms = millis();
+}
+
+// Every-loop RPUSTATUS driver for SB/FL/SA/LP. The mode loops are the single
+// sender: once per rpu_status_rate period -- or immediately when a substate sets
+// force_rpustatus (e.g. a TC 143 status request, which must not be held up by
+// time-critical substate work) -- transmit an RPUSTATUS incorporating the most
+// recent captured RPU status (LoRa or dock) if one arrived since the last report,
+// otherwise header-only. A rate of 0 disables periodic reporting but not forced.
+void StratoRatchuts::SendPeriodicRPUSTATUS()
+{
+    uint16_t rate = pibConfigs.rpu_status_rate.Read();
+    bool period_due = (rate != 0) && ((millis() - last_rpustatus_ms) >= (uint32_t)rate * 1000UL);
+    if (!force_rpustatus && !period_due) return;
+    force_rpustatus = false;
+
+    if (rpu_status_pending) {
+        SendRPUSTATUS(latest_rpu_json, latest_rpu_src); // clears rpu_status_pending
+    } else {
+        SendRPUSTATUS("", mode_code);                   // header-only
+    }
 }
 
 // Text TM tagged "RATCHUTSTEXT" with the given StateFlag1. Replaces the base
