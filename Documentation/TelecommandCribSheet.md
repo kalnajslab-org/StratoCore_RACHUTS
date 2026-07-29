@@ -11,7 +11,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 
 ---
 
-## MCB / reel motion (1–12)
+## MCB / reel motion (1–12, 22)
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
@@ -27,6 +27,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 10 | FULLRETRACT | Full retract | — |
 | 11 | CANCELMOTION | Cancel any ongoing motion | — |
 | 12 | ZEROREEL | Zero the reel position | — |
+| 22 | CENTERLW | Center the level wind (rejected if motion ongoing) | — |
 
 ## Motion limits / MCB (13–18)
 

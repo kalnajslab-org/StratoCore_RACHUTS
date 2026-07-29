@@ -127,6 +127,15 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
         }
         break;
+    case CENTERLW:
+        msg2 = "TC Center Level Wind";
+        if (mcb_motion_ongoing) {
+            msg3 = "Can't center level wind, motion ongoing";
+            msg1_flag = WARN;
+        } else {
+            mcbComm.TX_ASCII(MCB_CENTER_LW);
+        }
+        break;
     case TEMPLIMITS:
         msg2 = "TC Set Temperature Limits";
         if (!mcbComm.TX_Temp_Limits(mcbParam.tempLimits[0],mcbParam.tempLimits[1],mcbParam.tempLimits[2],mcbParam.tempLimits[3],mcbParam.tempLimits[4],mcbParam.tempLimits[5])) {
