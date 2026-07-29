@@ -25,15 +25,10 @@ public:
     PIBConfigs();
 
     // constants, manually change version number here to force update
-    static const uint16_t CONFIG_VERSION = 0x5C05;
+    static const uint16_t CONFIG_VERSION = 0x5C06;
     static const uint16_t BASE_ADDRESS = 0x0000;
 
     // ------------------ Configurations ------------------
-
-    // profile triggers
-    EEPROMData<float> sza_minimum;
-    EEPROMData<uint32_t> time_trigger;
-    EEPROMData<bool> sza_trigger; // true if SZA triggers profile, false if profile_time
 
     // profile sizing (in revolutions)
     EEPROMData<float> profile_size;
@@ -62,10 +57,7 @@ public:
     EEPROMData<uint16_t> preprofile_time;
     EEPROMData<uint16_t> puwarmup_time;
     EEPROMData<uint16_t> motion_timeout;
-    EEPROMData<uint16_t> profile_period;
 
-    // autonomous configurations
-    EEPROMData<uint8_t> num_profiles; // per night
     EEPROMData<uint8_t> num_redock;   // before erroring out
 
     // PU tracking

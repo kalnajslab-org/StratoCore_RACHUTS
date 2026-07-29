@@ -12,9 +12,6 @@
 PIBConfigs::PIBConfigs()
     : TeensyEEPROM(CONFIG_VERSION, BASE_ADDRESS)
     // ------------ Hard-Coded Config Defaults ------------
-    , sza_minimum(105)
-    , time_trigger(UINT32_MAX)
-    , sza_trigger(false)
     , profile_size(7500.0f)
     , dock_amount(200.0f)
     , dock_overshoot(100.0f)
@@ -35,8 +32,6 @@ PIBConfigs::PIBConfigs()
     , preprofile_time(180)
     , puwarmup_time(900)
     , motion_timeout(30)
-    , profile_period(7200)
-    , num_profiles(3)
     , num_redock(3)
     , pu_docked(false)
     , real_time_mcb(false)
@@ -52,9 +47,6 @@ void PIBConfigs::RegisterAll()
 {
     bool success = true;
 
-    success &= Register(&sza_minimum);
-    success &= Register(&time_trigger);
-    success &= Register(&sza_trigger);
     success &= Register(&profile_size);
     success &= Register(&dock_amount);
     success &= Register(&dock_overshoot);
@@ -75,8 +67,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&preprofile_time);
     success &= Register(&puwarmup_time);
     success &= Register(&motion_timeout);
-    success &= Register(&profile_period);
-    success &= Register(&num_profiles);
     success &= Register(&num_redock);
     success &= Register(&pu_docked);
     success &= Register(&real_time_mcb);

@@ -321,33 +321,9 @@ bool StratoRatchuts::StartMCBMotion()
         return false;
     }
 
-    if (autonomous_mode) {
-        log_nominal(log_array);
-    } else {
-        SendTextTM(log_array, FINE);
-    }
+    SendTextTM(log_array, FINE);
 
     return success;
-}
-
-bool StratoRatchuts::ScheduleProfiles()
-{
-    // no matter the trigger, reset the time_trigger to the max value, new TC needed to set new value
-    pibConfigs.time_trigger.Write(UINT32_MAX);
-
-    // schedule the configured number of profiles starting in five seconds
-    for (int i = 0; i < pibConfigs.num_profiles.Read(); i++) {
-        if (!scheduler.AddAction(ACTION_BEGIN_PROFILE, i * pibConfigs.profile_period.Read() + 5)) {
-            SendTextTM("Error scheduling profiles, scheduler failure", CRIT);
-            return false;
-        }
-    }
-
-    snprintf(log_array, LOG_ARRAY_SIZE, "Scheduled profiles: %u, %0.2f, %0.2f, %0.2f, %u, %u", pibConfigs.num_profiles.Read(),
-             pibConfigs.profile_size.Read(), pibConfigs.dock_amount.Read(), pibConfigs.dock_overshoot.Read(),
-             pibConfigs.dwell_time.Read(), pibConfigs.profile_period.Read());
-    SendTextTM(log_array, FINE);
-    return true;
 }
 
 void StratoRatchuts::AddMCBTM()

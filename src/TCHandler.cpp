@@ -8,18 +8,13 @@
 
 #include "StratoRatchuts.h"
 
-// Guard for manual-only TCs. mode_code is set at the top of each mode function,
+// Guard for flight-only TCs. mode_code is set at the top of each mode function,
 // so it reflects the current StratoCore mode when a TC is handled. On failure it
 // populates the TC-ack detail (msg3) and flag rather than logging directly.
-bool StratoRatchuts::RequireManualFlight(const char * cmd, String & msg3, StateFlag_t & flag)
+bool StratoRatchuts::RequireFlightMode(const char * cmd, String & msg3, StateFlag_t & flag)
 {
     if (0 != strcmp(mode_code, "FL")) {
         msg3 = String(cmd) + " ignored: not in flight mode";
-        flag = WARN;
-        return false;
-    }
-    if (autonomous_mode) {
-        msg3 = String(cmd) + " ignored: switch to manual mode";
         flag = WARN;
         return false;
     }
@@ -43,14 +38,9 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
     // MCB Telecommands -----------------------------------
     case DEPLOYx:
         msg2 = "TC Deploy Length";
-        if (autonomous_mode) {
-            msg3 = "Switch to manual mode before commanding motion";
-            msg1_flag = WARN;
-        } else {
-            deploy_length = mcbParam.deployLen;
-            msg2 += ": " + String(deploy_length, 1) + " revs";
-            SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
-        }
+        deploy_length = mcbParam.deployLen;
+        msg2 += ": " + String(deploy_length, 1) + " revs";
+        SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
         break;
     case DEPLOYv:
         pibConfigs.deploy_velocity.Write(mcbParam.deployVel);
@@ -65,14 +55,9 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
     case RETRACTx:
         msg2 = "TC Retract Length";
-        if (autonomous_mode) {
-            msg3 = "Switch to manual mode before commanding motion";
-            msg1_flag = WARN;
-        } else {
-            retract_length = mcbParam.retractLen;
-            msg2 += ": " + String(retract_length, 1) + " revs";
-            SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
-        }
+        retract_length = mcbParam.retractLen;
+        msg2 += ": " + String(retract_length, 1) + " revs";
+        SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
         break;
     case RETRACTv:
         pibConfigs.retract_velocity.Write(mcbParam.retractVel);
@@ -87,14 +72,9 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
     case DOCKx:
         msg2 = "TC Dock Length";
-        if (autonomous_mode) {
-            msg3 = "Switch to manual mode before commanding motion";
-            msg1_flag = WARN;
-        } else {
-            dock_length = mcbParam.dockLen;
-            msg2 += ": " + String(dock_length, 1) + " revs";
-            SetAction(ACTION_DOCK); // will be ignored if wrong mode
-        }
+        dock_length = mcbParam.dockLen;
+        msg2 += ": " + String(dock_length, 1) + " revs";
+        SetAction(ACTION_DOCK); // will be ignored if wrong mode
         break;
     case DOCKv:
         pibConfigs.dock_velocity.Write(mcbParam.dockVel);
@@ -176,30 +156,6 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
 
     // PIB Telecommands -----------------------------------
-    case SETAUTO:
-        msg2 = "TC Set Auto Mode";
-        if (!mcb_motion_ongoing) {
-            autonomous_mode = true;
-            inst_substate = MODE_ENTRY; // restart FL in auto
-        } else {
-            msg3 = "Motion ongoing, can't update mode";
-            msg1_flag = WARN;
-        }
-        break;
-    case SETMANUAL:
-        msg2 = "TC Set Manual Mode";
-        if (!mcb_motion_ongoing) {
-            autonomous_mode = false;
-            inst_substate = MODE_ENTRY; // restart FL in manual
-        } else {
-            msg3 = "Motion ongoing, can't update mode";
-            msg1_flag = WARN;
-        }
-        break;
-    case SETSZAMIN:
-        pibConfigs.sza_minimum.Write(pibParam.szaMinimum);
-        msg2 = "Set sza_minimum: " + String(pibConfigs.sza_minimum.Read(), 2);
-        break;
     case SETPROFILESIZE:
         pibConfigs.profile_size.Write(pibParam.profileSize);
         msg2 = "Set profile_size: " + String(pibConfigs.profile_size.Read(), 2);
@@ -212,47 +168,20 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         pibConfigs.dwell_time.Write(pibParam.dwellTime);
         msg2 = "Set dwell_time: " + String(pibConfigs.dwell_time.Read());
         break;
-    case SETPROFILEPERIOD:
-        pibConfigs.profile_period.Write(pibParam.profilePeriod);
-        msg2 = "Set profile_period: " + String(pibConfigs.profile_period.Read());
-        break;
-    case SETNUMPROFILES:
-        pibConfigs.num_profiles.Write(pibParam.numProfiles);
-        msg2 = "Set num_profiles: " + String(pibConfigs.num_profiles.Read());
-        break;
-    case SETTIMETRIGGER:
-        msg2 = "TC Set Time Trigger";
-        if ((uint32_t) now() > pibParam.timeTrigger) {
-            msg3 = "Can't use time trigger in past: " + String(pibParam.timeTrigger) + " < " + String((uint32_t) now());
-            msg1_flag = WARN;
-        } else {
-            pibConfigs.time_trigger.Write(pibParam.timeTrigger);
-            msg2 = "Set time_trigger: " + String(pibConfigs.time_trigger.Read());
-            profiles_remaining = pibConfigs.num_profiles.Read();
-        }
-        break;
-    case USESZATRIGGER:
-        pibConfigs.sza_trigger.Write(true);
-        msg2 = "Set sza_trigger: " + String(pibConfigs.sza_trigger.Read());
-        break;
-    case USETIMETRIGGER:
-        pibConfigs.sza_trigger.Write(false);
-        msg2 = "Set sza_trigger: " + String(pibConfigs.sza_trigger.Read());
-        break;
     case SETDOCKOVERSHOOT:
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
         msg2 = "Set dock_overshoot: " + String(pibConfigs.dock_overshoot.Read(), 2);
         break;
     case RETRYDOCK:
         msg2 = "TC Retry Dock";
-        if (!RequireManualFlight("Retry dock", msg3, msg1_flag)) break;
+        if (!RequireFlightMode("Retry dock", msg3, msg1_flag)) break;
         SetAction(COMMAND_REDOCK);
         deploy_length = mcbParam.deployLen;
         retract_length = mcbParam.retractLen;
         break;
     case GETPUSTATUS:
         msg2 = "TC Get PU Status";
-        if (!RequireManualFlight("Get PU status", msg3, msg1_flag)) break;
+        if (!RequireFlightMode("Get PU status", msg3, msg1_flag)) break;
         SetAction(ACTION_CHECK_PU);
         break;
     case PUPOWERON:
@@ -265,7 +194,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
     case MANUALPROFILE:
         msg2 = "TC Manual Profile";
-        if (!RequireManualFlight("Manual profile", msg3, msg1_flag)) break;
+        if (!RequireFlightMode("Manual profile", msg3, msg1_flag)) break;
         pibConfigs.profile_size.Write(pibParam.profileSize);
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
@@ -274,7 +203,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
     case OFFLOADPUPROFILE:
         msg2 = "TC Offload PU Profile";
-        if (!RequireManualFlight("PU profile offload", msg3, msg1_flag)) break;
+        if (!RequireFlightMode("PU profile offload", msg3, msg1_flag)) break;
         SetAction(ACTION_OFFLOAD_PU);
         break;
     case SETPREPROFILETIME:
@@ -307,7 +236,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         break;
     case DOCKEDPROFILE:
         msg2 = "TC Docked Profile";
-        if (!RequireManualFlight("Docked profile", msg3, msg1_flag)) break;
+        if (!RequireFlightMode("Docked profile", msg3, msg1_flag)) break;
         docked_profile_time = pibParam.dockedProfileTime;
         SetAction(COMMAND_DOCKED_PROFILE);
         break;

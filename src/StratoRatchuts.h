@@ -73,7 +73,6 @@ enum ScheduleAction_t : uint8_t {
     ACTION_IN_NO_LW,
     ACTION_DOCK,
     ACTION_MOTION_STOP,
-    ACTION_BEGIN_PROFILE,
     ACTION_END_DWELL,
     ACTION_CHECK_PU,
     ACTION_END_WARMUP,
@@ -157,11 +156,10 @@ private:
     void SafetyMode();
     void EndOfFlightMode();
 
-    // Flight mode subsets (in Flight.cpp)
-    void AutonomousFlight();
+    // Flight mode subset (in Flight.cpp)
     void ManualFlight();
 
-    // Flight states under autonomous or manual (each in own .cpp file)
+    // Flight states (each in its own .cpp file)
     // when starting the state, call with restart_state = true
     // then call with restart_state = false until the function returns true meaning it's completed
     bool Flight_CheckPU(bool restart_state);
@@ -174,10 +172,10 @@ private:
     // Telcommand handler - returns ack/nak
     bool TCHandler(Telecommand_t telecommand);
 
-    // Guard for manual-only TCs: returns true if in manual flight mode,
-    // otherwise sets the TC-ack detail (msg3) + flag naming the command and the
-    // required mode, and returns false (so the caller can break out).
-    bool RequireManualFlight(const char * cmd, String & msg3, StateFlag_t & flag);
+    // Guard for flight-only TCs: returns true if in flight mode, otherwise sets
+    // the TC-ack detail (msg3) + flag naming the command and the required mode,
+    // and returns false (so the caller can break out).
+    bool RequireFlightMode(const char * cmd, String & msg3, StateFlag_t & flag);
 
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);
@@ -207,9 +205,6 @@ private:
 
     // Start any type of MCB motion
     bool StartMCBMotion();
-
-    // Schedule profiles in autonomous mode
-    bool ScheduleProfiles();
 
     // Add an MCB motion TM packet to the binary TM buffer
     void AddMCBTM();
@@ -242,9 +237,6 @@ private:
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
 
-    // track the flight mode (autonomous/manual)
-    bool autonomous_mode = false;
-
     // flags for MCB state tracking
     bool mcb_low_power = false;
     bool mcb_motion_ongoing = false;
@@ -261,10 +253,6 @@ private:
     bool pu_measure = false;
     bool pu_preprofile = false;
     bool check_pu_success = false;
-
-    // tracks the number of profiles remaining in autonomous mode and if they're scheduled
-    uint8_t profiles_remaining = 0;
-    bool profiles_scheduled = false;
 
     // uint32_t start time of the current profile in millis
     uint32_t profile_start = 0;

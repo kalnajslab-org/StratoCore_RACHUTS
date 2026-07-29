@@ -8,7 +8,7 @@
 
 #include "StratoRatchuts.h"
 
-// Flight mode states, FLA = autonomous, FLM = manual, FL = general
+// Flight mode states, FLM = manual, FL = general
 enum FLStates_t : uint8_t {
     FL_ENTRY = MODE_ENTRY,
 
@@ -24,15 +24,10 @@ enum FLStates_t : uint8_t {
     FLM_PROFILE,
     FLM_DOCKED,
 
-    // autonomous
-    FLA_IDLE,
-    FLA_WAIT_PROFILE,
-    FLA_PROFILE,
-    FLA_PU_OFFLOAD,
-    FLA_NOTE_PROFILE_END,
-
-    // general off-nominal states
-    FL_ERROR_LOOP,
+    // general off-nominal states. Values are pinned so the ground-visible substate
+    // numbers are unchanged by the removal of the former autonomous (FLA_*) states,
+    // which occupied 9-13 (FL_ERROR_LOOP has historically been substate 14).
+    FL_ERROR_LOOP = 14,
     FL_SHUTDOWN_LOOP,
 
     // StratoCore-specified states
@@ -62,14 +57,13 @@ void StratoRatchuts::FlightMode()
         // wait for the first GPS message from Zephyr to set the time before moving on
         log_debug("Waiting on GPS time");
         if (time_valid) {
-            inst_substate = (autonomous_mode) ? FLA_IDLE : FLM_IDLE;
+            inst_substate = FLM_IDLE;
         }
         break;
     case FL_ERROR_LANDING:
         log_error("Landed in flight error");
         scheduler.ClearSchedule();
         mcb_motion_ongoing = false;
-        profiles_remaining = 0;
         mcb_motion = NO_MOTION;
         mcbComm.TX_ASCII(MCB_GO_LOW_POWER);
         scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
@@ -101,13 +95,9 @@ void StratoRatchuts::FlightMode()
         log_nominal("Exiting FL");
         break;
     default:
-        // All FLM_* and FLA_* substates fall here and are dispatched to the
-        // mode-specific inner switch in ManualFlight() or AutonomousFlight().
-        if (autonomous_mode) {
-            AutonomousFlight();
-        } else {
-            ManualFlight();
-        }
+        // All FLM_* substates fall here and are dispatched to the inner switch
+        // in ManualFlight().
+        ManualFlight();
         break;
     }
 }
@@ -199,70 +189,6 @@ void StratoRatchuts::ManualFlight()
 
     default:
         log_error("Unknown manual substate");
-        break;
-    };
-}
-
-void StratoRatchuts::AutonomousFlight()
-{
-    switch (inst_substate) {
-    case FLA_IDLE:
-        // reset profile schedule for test, set this to 80, reset to 45 for flight
-        if (zephyrRX.zephyr_gps.solar_zenith_angle < 80) {
-            profiles_remaining = pibConfigs.num_profiles.Read();
-            profiles_scheduled = false;
-        }
-
-        // check for profiles or TSEN
-        if (0 != profiles_remaining && pibConfigs.sza_trigger.Read() && zephyrRX.zephyr_gps.solar_zenith_angle > pibConfigs.sza_minimum.Read()) {
-            if (profiles_scheduled) {
-                inst_substate = FLA_WAIT_PROFILE;
-            } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
-                profiles_scheduled = true;
-                inst_substate = FLA_WAIT_PROFILE;
-            } else {
-                inst_substate = FL_ERROR_LANDING;
-            }
-        } else if (0 != profiles_remaining && !pibConfigs.sza_trigger.Read() && (uint32_t) now() >= pibConfigs.time_trigger.Read()) {
-            if (profiles_scheduled) {
-                inst_substate = FLA_WAIT_PROFILE;
-            } else if (ScheduleProfiles()) { // Schedule Profiles sends result as TM
-                profiles_scheduled = true;
-                inst_substate = FLA_WAIT_PROFILE;
-            } else {
-                inst_substate = FL_ERROR_LANDING;
-            }
-        }
-        break;
-
-    case FLA_WAIT_PROFILE:
-        if (CheckAction(ACTION_BEGIN_PROFILE)) {
-            Flight_Profile(true);
-            inst_substate = FLA_PROFILE;
-        }
-        break;
-
-    case FLA_PROFILE:
-        if (Flight_Profile(false)) {
-            Flight_PUOffload(true);
-            inst_substate = FLA_PU_OFFLOAD;
-        }
-        break;
-
-    case FLA_PU_OFFLOAD:
-        if (Flight_PUOffload(false)) {
-            inst_substate = FLA_NOTE_PROFILE_END;
-        }
-        break;
-
-    case FLA_NOTE_PROFILE_END:
-        if (profiles_remaining != 0) profiles_remaining--;
-
-        inst_substate = FLA_IDLE;
-        break;
-
-    default:
-        log_error("Unknown autonomous substate");
         break;
     };
 }
