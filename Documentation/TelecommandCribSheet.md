@@ -40,40 +40,27 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 17 | USELIMITS | Enable limits | — |
 | 18 | GETMCBEEPROM | Request MCB EEPROM (returned as a TM) | — |
 
-## Flight mode (130–131)
+## Profile configuration (133–135, 141)
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 130 | SETAUTO | Switch to autonomous flight mode (restarts flight mode) | — |
-| 131 | SETMANUAL | Switch to manual flight mode (restarts flight mode) | — |
-
-## Autonomous profile configuration (132–141)
-
-| TC | Name | Description | Params |
-|----|------|-------------|--------|
-| 132 | SETSZAMIN | Min SZA for autonomous profile trigger | SZA (float) |
 | 133 | SETPROFILESIZE | Profile deploy length | size (float, rev) |
 | 134 | SETDOCKAMOUNT | Dock retract length | amount (float, rev) |
 | 135 | SETDWELLTIME | Dwell time at profile bottom | time (uint16, s) |
-| 136 | SETPROFILEPERIOD | Period between autonomous profiles | period (uint16, s) |
-| 137 | SETNUMPROFILES | Profiles per autonomous session | count (uint) |
-| 138 | USESZATRIGGER | Trigger autonomous profiles on SZA threshold | — |
-| 139 | USETIMETRIGGER | Trigger autonomous profiles on time | — |
-| 140 | SETTIMETRIGGER | Unix timestamp for autonomous trigger | timestamp (uint32) |
 | 141 | SETDOCKOVERSHOOT | Dock overshoot distance | overshoot (float, rev) |
 
 ## Manual profile / dock operations
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 142 | RETRYDOCK | Manual redock (**manual only**) | deploy len (rev), retract len (rev) |
-| 146 | MANUALPROFILE | Execute a profile (**manual only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s) |
-| 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**manual only**) | — |
+| 142 | RETRYDOCK | Manual redock (**flight only**) | deploy len (rev), retract len (rev) |
+| 146 | MANUALPROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s) |
+| 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**flight only**) | — |
 | 148 | SETPREPROFILETIME | Pre-profile wait after RPU enters measure | time (uint16, s) |
 | 149 | SETPUWARMUPTIME | PU warmup time | time (uint16, s) |
 | 150 | AUTOREDOCKPARAMS | Auto-redock parameters | redock out (rev), redock in (rev), max retries |
 | 151 | SETMOTIONTIMEOUT | Motion timeout | timeout (uint16, s) |
-| 153 | DOCKEDPROFILE | Execute a docked profile (**manual only**) | duration (s) |
+| 153 | DOCKEDPROFILE | Execute a docked profile (**flight only**) | duration (s) |
 | 154 | STARTREALTIMEMCB | Enable real-time MCB data streaming | — |
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
 
@@ -81,7 +68,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 143 | GETPUSTATUS | Request RPU status over dock (**manual only**) → RPUSTATUS TM | — |
+| 143 | GETPUSTATUS | Request RPU status over dock (**flight only**) → RPUSTATUS TM | — |
 | 144 | PUPOWERON | Enable RPU dock power | — |
 | 145 | PUPOWEROFF | Disable RPU dock power | — |
 | 180 | RPUCONFIG | Configure RPU measurement (stored) | duration (s), rate (s), ROPC, TDLAS, TSEN, RS41 |
@@ -118,7 +105,7 @@ Notes:
 
 ## Common sequences
 
-- **Get RPU status (manual):**
+- **Get RPU status (flight mode):**
   - `143` GETPUSTATUS *(no params)* → RPUSTATUS TM.
 - **Bench RPU measure + offload:**
   - `181` RPUSTATUSPERIOD(period s) — set how often the RPU reports status
@@ -128,7 +115,6 @@ Notes:
   - `184` RPUGOSTANDBY *(no params)*
   - `147` OFFLOADPUPROFILE *(no params)* → RPUREPORT TMs.
 - **Manual profile:**
-  - `131` SETMANUAL *(no params)*
   - `146` MANUALPROFILE(profile size rev, dock amount rev, dock overshoot rev, dwell s)
 - **Dump configs:**
   - `18` GETMCBEEPROM *(no params)*

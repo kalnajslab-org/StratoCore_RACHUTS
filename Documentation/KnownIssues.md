@@ -248,16 +248,15 @@ timeouts. Removed; the USB `Serial.println(json)` was kept.
 
 ---
 
-## 11. Manual-only TCs silently no-op in the flight error state (RACHUTS) — **OPEN (fix planned)**
+## 11. Flight-only TCs silently no-op in the flight error state (RACHUTS) — **OPEN (fix planned)**
 
-The manual-only TCs (RETRYDOCK 142, GETPUSTATUS 143, MANUALPROFILE 146,
+The flight-only TCs (RETRYDOCK 142, GETPUSTATUS 143, MANUALPROFILE 146,
 OFFLOADPUPROFILE 147, DOCKEDPROFILE 153) just `SetAction(...)`; the action is
-only *consumed* in `ManualFlight`'s `FLM_IDLE`. `RequireManualFlight` only checks
-`mode_code == "FL"` and `!autonomous_mode` — both of which are still true when
-the instrument is parked in the flight **error loop** (`FL_ERROR_LOOP`,
-substate 14). So in the error state these TCs pass the guard, set an action that
-`FLM_IDLE` never runs, and silently expire (`WatchFlags` clears it after 3 loops)
-— no warning.
+only *consumed* in `ManualFlight`'s `FLM_IDLE`. `RequireFlightMode` only checks
+`mode_code == "FL"`, which is still true when the instrument is parked in the
+flight **error loop** (`FL_ERROR_LOOP`, substate 14). So in the error state these
+TCs pass the guard, set an action that `FLM_IDLE` never runs, and silently expire
+(`WatchFlags` clears it after 3 loops) — no warning.
 
 **Symptom:** after a profile/MCB fault drops RACHUTS to `MODE_ERROR` →
 `FL_ERROR_LOOP`, TC 143 "gets no response" and TC 147 "returns no records," while
@@ -268,9 +267,27 @@ loop). `SENDSTATE` (TC 203) reports `mode: 1, substate: 14`.
 **Recovery today:** `EXITERROR` (TC 201) → back to `FLM_IDLE`, then the TCs work.
 
 **Planned fix:** add a `flight_error_state` member (set true in `FL_ERROR_LANDING`,
-cleared in `FL_ENTRY`) and reject in `RequireManualFlight` with a `WARN`
+cleared in `FL_ENTRY`) and reject in `RequireFlightMode` with a `WARN`
 (`"<cmd> ignored: in flight error state (send EXITERROR)"`) so the command warns
 instead of vanishing.
+
+---
+
+## 12. No RPUSTATUS on boot / mode entry — first report delayed a full period — **OPEN (fix planned)**
+
+`SendPeriodicRPUSTATUS()` gates on
+`(millis() - last_rpustatus_ms) >= rpu_status_rate * 1000`. At boot `last_rpustatus_ms`
+initializes to 0 and `millis()` also starts near 0, so the elapsed time doesn't
+reach a full period until `rpu_status_rate` seconds after boot. With the default
+rate (1800 s) the first `SB, SB` report isn't sent until **~30 min after boot**;
+`SB_ENTRY` doesn't force one. In general no report is ever sent immediately on
+entering a reporting mode — the first one always waits one full period.
+
+**Planned fix:** set `force_rpustatus = true` in each reporting mode's `ENTRY`
+substate (SB/FL/SA/LP) so a report goes out on the first loop after entry. Bonus:
+every mode transition then emits a fresh `RPUSTATUS` (confirms the new mode +
+current RPU status), and the periodic timer proceeds from there. Apply **after**
+the autonomous-mode removal is checked in.
 
 ---
 
