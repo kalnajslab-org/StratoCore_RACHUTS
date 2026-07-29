@@ -24,12 +24,12 @@ enum LPStates_t : uint8_t {
 void StratoRatchuts::LowPowerMode()
 {
     mode_code = "LP";
-    SendPeriodicRPUSTATUS();
+    SendPeriodicRATCHUTSREPORT();
     switch (inst_substate) {
     case LP_ENTRY:
         // perform setup
         log_nominal("Entering LP");
-        force_rpustatus = true; // report status promptly on mode entry
+        force_ratchutsreport = true; // report status promptly on mode entry
         inst_substate = LP_ALERT_MCB;
         break;
     case LP_ALERT_MCB:

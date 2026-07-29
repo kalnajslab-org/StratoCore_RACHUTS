@@ -122,13 +122,13 @@ public:
     void RunPURouter();
     void LoRaRX();
     void LoRaInit();
-    // Build and send an RPUSTATUS TM: a "ratchuts" header (always present) plus
+    // Build and send a RATCHUTSREPORT TM: a "ratchuts" header (always present) plus
     // an "rpu" block when rpu_block is non-empty. Records the transmission time.
-    void SendRPUSTATUS(const String& rpu_block, const String& source);
+    void SendRATCHUTSREPORT(const String& rpu_block, const String& source);
 
     // Called every loop in SB/FL/SA/LP: if a full rpu_status_rate period has
-    // elapsed with no RPUSTATUS sent, transmit a header-only RPUSTATUS.
-    void SendPeriodicRPUSTATUS();
+    // elapsed with no RATCHUTSREPORT sent, transmit a header-only RATCHUTSREPORT.
+    void SendPeriodicRATCHUTSREPORT();
 
     // Send a text TM (StateMess1 = "RATCHUTSTEXT") with the given StateFlag1
     // (FINE/WARN/CRIT). Unlike the base ZephyrLog*(), this routes through
@@ -232,7 +232,7 @@ private:
     void ReadAnalog();
 
     // 2-letter code of the current StratoCore mode (SB/FL/LP/SA/EF), set at the
-    // top of each mode function. Used in the RPUSTATUS TM StateDetails.
+    // top of each mode function. Used in the RATCHUTSREPORT TM StateDetails.
     const char * mode_code = "SB";
 
     ActionFlag_t action_flags[NUM_ACTIONS] = {{0}}; // initialize all flags to false
@@ -283,14 +283,14 @@ private:
     String pu_status_json;              // raw JSON status string from RPU
     bool pu_status_received = false;    // set when a fresh RPU_STATUS is received, cleared by Flight_CheckPU
 
-    // RPUSTATUS reporting cadence (see SendPeriodicRPUSTATUS)
-    uint32_t last_rpustatus_ms = 0;     // millis() of last RPUSTATUS TM sent (any source)
+    // RATCHUTSREPORT reporting cadence (see SendPeriodicRATCHUTSREPORT)
+    uint32_t last_ratchutsreport_ms = 0;     // millis() of last RATCHUTSREPORT TM sent (any source)
     uint32_t last_rpu_recv_ms = 0;      // millis() of last RPU status received (LoRa or dock)
     bool rpu_ever_received = false;     // set once any RPU status has been received
     String latest_rpu_json;             // most recent captured RPU status (LoRa or dock)
     String latest_rpu_src;              // origin of latest_rpu_json ("LORA" / "DOCK")
     bool rpu_status_pending = false;    // captured status not yet included in a report
-    bool force_rpustatus = false;       // request an immediate RPUSTATUS on the next mode loop
+    bool force_ratchutsreport = false;       // request an immediate RATCHUTSREPORT on the next mode loop
 
     uint8_t eeprom_buffer[256];
 

@@ -45,13 +45,13 @@ enum FLStates_t : uint8_t {
 void StratoRatchuts::FlightMode()
 {
     mode_code = "FL";
-    SendPeriodicRPUSTATUS();
+    SendPeriodicRATCHUTSREPORT();
     // todo: draw out flight mode state machine
     switch (inst_substate) {
     case FL_ENTRY:
         // perform setup
         log_nominal("Entering FL");
-        force_rpustatus = true; // report status promptly on mode entry
+        force_ratchutsreport = true; // report status promptly on mode entry
         inst_substate = FL_GPS_WAIT;
         break;
     case FL_GPS_WAIT:
@@ -152,7 +152,7 @@ void StratoRatchuts::ManualFlight()
             // request a status report if the PU check succeeded (otherwise an error message will have been sent);
             // the mode loop sends it, so time-critical substate work isn't held up
             if (check_pu_success) {
-                force_rpustatus = true;
+                force_ratchutsreport = true;
             }
             inst_substate = FLM_IDLE;
         }
