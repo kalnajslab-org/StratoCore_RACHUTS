@@ -51,6 +51,7 @@ void StratoRatchuts::FlightMode()
     case FL_ENTRY:
         // perform setup
         log_nominal("Entering FL");
+        force_rpustatus = true; // report status promptly on mode entry
         inst_substate = FL_GPS_WAIT;
         break;
     case FL_GPS_WAIT:

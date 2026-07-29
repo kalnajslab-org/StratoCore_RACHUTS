@@ -29,6 +29,7 @@ void StratoRatchuts::LowPowerMode()
     case LP_ENTRY:
         // perform setup
         log_nominal("Entering LP");
+        force_rpustatus = true; // report status promptly on mode entry
         inst_substate = LP_ALERT_MCB;
         break;
     case LP_ALERT_MCB:

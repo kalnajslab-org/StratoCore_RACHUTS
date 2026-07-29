@@ -26,6 +26,7 @@ void StratoRatchuts::StandbyMode()
     switch (inst_substate) {
     case SB_ENTRY:
         log_nominal("Entering SB");
+        force_rpustatus = true; // report status promptly on mode entry
 
         // send mode request in first loop
         scheduler.AddAction(SEND_IMR, 0);

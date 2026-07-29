@@ -273,21 +273,21 @@ instead of vanishing.
 
 ---
 
-## 12. No RPUSTATUS on boot / mode entry — first report delayed a full period — **OPEN (fix planned)**
+## 12. No RPUSTATUS on boot / mode entry — first report delayed a full period — **RESOLVED**
 
 `SendPeriodicRPUSTATUS()` gates on
 `(millis() - last_rpustatus_ms) >= rpu_status_rate * 1000`. At boot `last_rpustatus_ms`
 initializes to 0 and `millis()` also starts near 0, so the elapsed time doesn't
 reach a full period until `rpu_status_rate` seconds after boot. With the default
-rate (1800 s) the first `SB, SB` report isn't sent until **~30 min after boot**;
-`SB_ENTRY` doesn't force one. In general no report is ever sent immediately on
-entering a reporting mode — the first one always waits one full period.
+rate (1800 s) the first `SB, SB` report wasn't sent until **~30 min after boot**;
+`SB_ENTRY` didn't force one. In general no report was ever sent immediately on
+entering a reporting mode — the first one always waited one full period.
 
-**Planned fix:** set `force_rpustatus = true` in each reporting mode's `ENTRY`
-substate (SB/FL/SA/LP) so a report goes out on the first loop after entry. Bonus:
-every mode transition then emits a fresh `RPUSTATUS` (confirms the new mode +
-current RPU status), and the periodic timer proceeds from there. Apply **after**
-the autonomous-mode removal is checked in.
+**Fix:** each reporting mode's `ENTRY` substate (SB/FL/SA/LP) now sets
+`force_rpustatus = true`, so a report goes out on the first loop after entry
+(`force_rpustatus` is honored even when `rpu_status_rate == 0`). Every mode
+transition now emits a fresh `RPUSTATUS` — confirming the new mode + current RPU
+status — and the periodic timer proceeds from there.
 
 ---
 

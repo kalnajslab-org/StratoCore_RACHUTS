@@ -37,6 +37,7 @@ void StratoRatchuts::SafetyMode()
     case SA_ENTRY:
         // perform setup
         log_nominal("Entering SA");
+        force_rpustatus = true; // report status promptly on mode entry
         inst_substate = SA_SEND_FULL_RETRACT;
         break;
 
