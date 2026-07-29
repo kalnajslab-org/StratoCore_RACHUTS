@@ -260,7 +260,7 @@ TCs pass the guard, set an action that `FLM_IDLE` never runs, and silently expir
 
 **Symptom:** after a profile/MCB fault drops RACHUTS to `MODE_ERROR` →
 `FL_ERROR_LOOP`, TC 143 "gets no response" and TC 147 "returns no records," while
-`RPUSTATUS` TMs keep flowing (`SendPeriodicRPUSTATUS()` runs at the top of
+`RATCHUTSREPORT` TMs keep flowing (`SendPeriodicRATCHUTSREPORT()` runs at the top of
 `FlightMode` regardless of substate, so the periodic report continues in the error
 loop). `SENDSTATE` (TC 203) reports `mode: 1, substate: 14`.
 
@@ -273,10 +273,10 @@ instead of vanishing.
 
 ---
 
-## 12. No RPUSTATUS on boot / mode entry — first report delayed a full period — **RESOLVED**
+## 12. No RATCHUTSREPORT on boot / mode entry — first report delayed a full period — **RESOLVED**
 
-`SendPeriodicRPUSTATUS()` gates on
-`(millis() - last_rpustatus_ms) >= rpu_status_rate * 1000`. At boot `last_rpustatus_ms`
+`SendPeriodicRATCHUTSREPORT()` gates on
+`(millis() - last_ratchutsreport_ms) >= rpu_status_rate * 1000`. At boot `last_ratchutsreport_ms`
 initializes to 0 and `millis()` also starts near 0, so the elapsed time doesn't
 reach a full period until `rpu_status_rate` seconds after boot. With the default
 rate (1800 s) the first `SB, SB` report wasn't sent until **~30 min after boot**;
@@ -284,9 +284,9 @@ rate (1800 s) the first `SB, SB` report wasn't sent until **~30 min after boot**
 entering a reporting mode — the first one always waited one full period.
 
 **Fix:** each reporting mode's `ENTRY` substate (SB/FL/SA/LP) now sets
-`force_rpustatus = true`, so a report goes out on the first loop after entry
-(`force_rpustatus` is honored even when `rpu_status_rate == 0`). Every mode
-transition now emits a fresh `RPUSTATUS` — confirming the new mode + current RPU
+`force_ratchutsreport = true`, so a report goes out on the first loop after entry
+(`force_ratchutsreport` is honored even when `rpu_status_rate == 0`). Every mode
+transition now emits a fresh `RATCHUTSREPORT` — confirming the new mode + current RPU
 status — and the periodic timer proceeds from there.
 
 ---
@@ -302,7 +302,7 @@ StateMess2/3 are empty (omitted from the XML).
 
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
-| `RPUSTATUS` | `SendRPUSTATUS(rpu_block, source)` — sole caller is `SendPeriodicRPUSTATUS()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"ratchuts":{"mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. The `ratchuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
+| `RATCHUTSREPORT` | `SendRATCHUTSREPORT(rpu_block, source)` — sole caller is `SendPeriodicRATCHUTSREPORT()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"ratchuts":{"mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. The `ratchuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
 | `RPUREPORT` | `SendRPUREPORT(packet_num)` (payload added in `HandlePUBin`, PURouter) | `Number of RPURecords: <n>` | `PU TM: <profile_id>.<packet_num>, <pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 38 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
@@ -328,25 +328,28 @@ and `Flight_PUOffload` (`ST_TM_ACK`) call `ZephyrTXpoke(ZEPHYRTX_TM)` to
 re-transmit the **most recently built** TM from the XMLWriter on a NAK/timeout —
 no new message is constructed.
 
-**`RPUSTATUS` reporting model** (mode loops are the single sender):
+**`RATCHUTSREPORT` reporting model** (mode loops are the single sender):
 - **Reception captures, it does not send.** LoRa (`LoRaRX()` in `InstrumentLoop`)
   and dock (`RPU_STATUS` in PURouter) store the decoded status into
   `latest_rpu_json` / `latest_rpu_src` and set `rpu_status_pending`. Sending a TM
   directly from `InstrumentLoop` raced the mode-loop TM and dropped LoRa reports.
-- **`SendPeriodicRPUSTATUS()` is the only sender**, called every loop at the top
+- **`SendPeriodicRATCHUTSREPORT()` is the only sender**, called every loop at the top
   of `StandbyMode`/`FlightMode`/`SafetyMode`/`LowPowerMode` (not EF). It transmits
   once per `rpu_status_rate` seconds (TC 181; `0` disables periodic), incorporating
   the most recent captured status if `rpu_status_pending`, else header-only.
   `millis()` math is unsigned (rollover-safe); emitting a block clears the pending
   flag so a status is reported once.
-- **`force_rpustatus`** lets a substate request an immediate report without doing
+- **`force_ratchutsreport`** lets a substate request an immediate report without doing
   the send itself (so time-critical substate work isn't blocked): `FLM_CHECK_PU`
   (TC 143) and `FLM_REDOCK` set the flag and the next mode loop transmits. Forced
   reports send even when `rpu_status_rate == 0`.
 
 **Notes:**
-- `RPUSTATUS` and `RPUREPORT` builders were renamed from `SendRPUStatusTM` /
-  `SendProfileTM` so the function name matches the StateMess1 tag.
+- The `RATCHUTSREPORT` builder (`SendRATCHUTSREPORT`) was previously `RPUSTATUS` /
+  `SendRPUSTATUS` (and originally `SendRPUStatusTM`); renamed to align with the
+  RATS `RATSREPORT` convention (cf. `RATCHUTSTEXT` / `RATCHUTSTCACK` /
+  `RATCHUTSEEPROM`). `RPUREPORT` (`SendRPUREPORT`, formerly `SendProfileTM`) is the
+  separate binary profile-record TM. Each builder's name matches its StateMess1 tag.
 - The `RPUREPORT` payload is added to the TM buffer in `HandlePUBin` (PURouter)
   when the record block passes checksum; `SendRPUREPORT` only sets the state
   details/flags and transmits.
