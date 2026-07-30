@@ -150,10 +150,12 @@ void StratoRatchuts::SendRATCHUTSREPORT(const String& rpu_block, const String& s
     // can gauge staleness even on header-only reports.
     int32_t rpu_age_s = rpu_ever_received ? (int32_t)((millis() - last_rpu_recv_ms) / 1000UL) : -1;
 
-    char header[192];
+    // epoch = system time in seconds since 1970 (RTC via now(), same as RATSREPORT's
+    // header epoch). Unset until the RTC is set from GPS time.
+    char header[208];
     snprintf(header, sizeof(header),
-             "{\"ratchuts\":{\"mode\":\"%s\",\"substate\":%u,\"reel\":%.2f,\"src\":\"%s\",\"rpu_age_s\":%ld}",
-             mode_code, (unsigned)inst_substate, reel_pos, source.c_str(), (long)rpu_age_s);
+             "{\"ratchuts\":{\"epoch\":%lu,\"mode\":\"%s\",\"substate\":%u,\"reel\":%.2f,\"src\":\"%s\",\"rpu_age_s\":%ld}",
+             (unsigned long)now(), mode_code, (unsigned)inst_substate, reel_pos, source.c_str(), (long)rpu_age_s);
 
     String payload(header);
     if (rpu_block.length() > 0) {
