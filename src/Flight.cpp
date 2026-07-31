@@ -24,10 +24,8 @@ enum FLStates_t : uint8_t {
     FLM_PROFILE,
     FLM_DOCKED,
 
-    // general off-nominal states. Values are pinned so the ground-visible substate
-    // numbers are unchanged by the removal of the former autonomous (FLA_*) states,
-    // which occupied 9-13 (FL_ERROR_LOOP has historically been substate 14).
-    FL_ERROR_LOOP = 14,
+    // general off-nominal states
+    FL_ERROR_LOOP,
     FL_SHUTDOWN_LOOP,
 
     // StratoCore-specified states
