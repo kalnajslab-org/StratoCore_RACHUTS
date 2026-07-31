@@ -254,7 +254,7 @@ The flight-only TCs (RETRYDOCK 142, GETPUSTATUS 143, MANUALPROFILE 146,
 OFFLOADPUPROFILE 147, DOCKEDPROFILE 153) just `SetAction(...)`; the action is
 only *consumed* in `ManualFlight`'s `FLM_IDLE`. `RequireFlightMode` only checks
 `mode_code == "FL"`, which is still true when the instrument is parked in the
-flight **error loop** (`FL_ERROR_LOOP`, substate 14). So in the error state these
+flight **error loop** (`FL_ERROR_LOOP`, substate 9). So in the error state these
 TCs pass the guard, set an action that `FLM_IDLE` never runs, and silently expire
 (`WatchFlags` clears it after 3 loops) — no warning.
 
@@ -262,7 +262,9 @@ TCs pass the guard, set an action that `FLM_IDLE` never runs, and silently expir
 `FL_ERROR_LOOP`, TC 143 "gets no response" and TC 147 "returns no records," while
 `RATCHUTSREPORT` TMs keep flowing (`SendPeriodicRATCHUTSREPORT()` runs at the top of
 `FlightMode` regardless of substate, so the periodic report continues in the error
-loop). `SENDSTATE` (TC 203) reports `mode: 1, substate: 14`.
+loop). `SENDSTATE` (TC 203) reports `mode: 1, substate: 9` (this substate's
+numbering was previously pinned to 14 for continuity with pre-refactor logs;
+since unpinned — see `FlightModeControlFlow.md`).
 
 **Recovery today:** `EXITERROR` (TC 201) → back to `FLM_IDLE`, then the TCs work.
 
@@ -288,6 +290,75 @@ entering a reporting mode — the first one always waited one full period.
 (`force_ratchutsreport` is honored even when `rpu_status_rate == 0`). Every mode
 transition now emits a fresh `RATCHUTSREPORT` — confirming the new mode + current RPU
 status — and the periodic timer proceeds from there.
+
+---
+
+## 13. No way to cancel a specific scheduled action — stale actions can survive a `MODE_ERROR` episode — **OPEN**
+
+`inst_substate = MODE_ERROR` (253) is a mode-agnostic forced control transfer:
+any code (`MCBRouter`, `PURouter`, or a sub-state-machine escaping itself) can
+write it with no knowledge of which mode is running, because every mode's own
+enum aliases its own error-entry substate to the same numeric value
+(`FL_ERROR_LANDING = MODE_ERROR`, `SB_ERROR_LANDING = MODE_ERROR`, etc. — see
+`FlightModeControlFlow.md`). Whatever the mode's own state machine was doing is
+discarded the moment its `switch (inst_substate)` next evaluates and lands on
+that case.
+
+**The gap:** there is no mechanism to cancel a *specific* action that was
+scheduled before the fault. `StratoScheduler` is a single shared, time-ordered
+queue; `ActionHandler` sets one flag per **action type**
+(`action_flags[action].flag_value`), not per scheduling call. Two independent
+places can leak a stale action across an error episode:
+
+1. **The scheduler queue itself** — a not-yet-due action sitting in
+   `StratoScheduler`'s linked list.
+2. **`action_flags[]`** — once an action's timer fires, `RunScheduler()` (which
+   runs *before* `RunMCBRouter`/`RunPURouter`/`RunMode` in `loop()`) has already
+   set the flag, independent of the queue. `WatchFlags()` only ages an unchecked
+   flag out after `FLAG_STALE` (3) loops.
+
+`scheduler.ClearSchedule()` empties queue (1) but **never touches (2)** — an
+already-fired flag survives it untouched. And only `Flight.cpp`'s
+`FL_ERROR_LANDING` calls `ClearSchedule()` at all; `Standby`, `Safety`,
+`LowPower`, and `EndOfFlight`'s own `*_ERROR_LANDING` do not, so even
+queue-level protection is absent there. `StratoCore::RunMode()`'s automatic
+`ClearSchedule()` on mode transitions doesn't help either, since entering
+`MODE_ERROR` is a *substate* change — `inst_mode` never changes during an error
+episode, so that safety net never fires.
+
+**Risk profile:** a genuine *mode* switch (FL→SB, FL→SA, ...) is actually better
+protected than an in-mode error episode — `StratoCore::RunMode()` calls
+`scheduler.ClearSchedule()` unconditionally on every `inst_mode != new_inst_mode`
+transition, centrally in the base class, with no per-mode opt-in required. But
+it's the same function, so it shares the identical blind spot: an
+already-fired `action_flags[]` entry survives a mode switch untouched, same as
+it survives `FL_ERROR_LANDING`. In practice this issue is concentrated within
+`MODE_FLIGHT`: nearly all runtime is spent in FL, and it's where nearly all
+reel-motion fault paths live (motion timeouts, MCB faults, RPU faults), so a
+fault-and-recover episode almost always stays inside FL (`FL_ERROR_LOOP` →
+`EXITERROR` → `FLM_IDLE`) rather than crossing an actual mode boundary. The
+other modes are both lower-traffic and lower-fault-rate, so the missing
+`ClearSchedule()` call in their own `*_ERROR_LANDING` cases is a real gap but a
+narrower one in practice.
+
+**Concrete failure mode:** a sub-machine (e.g. `Flight_Profile`) schedules a
+far-future action (e.g. `ACTION_END_DWELL`). A fault lands `inst_substate` on
+`FL_ERROR_LANDING` before the action is due. If it's still queued,
+`ClearSchedule()` removes it — handled. But if the action's timer already fired
+in the same or an earlier loop (queue → `ActionHandler` → flag set) before the
+fault was detected, or fires later while parked in `FL_ERROR_LOOP` awaiting
+`EXITERROR` (TC 201), the flag survives `ClearSchedule()` untouched. Once
+recovery re-enters `FLM_IDLE` and starts a *new*, unrelated command, if that
+command's sub-machine happens to `CheckAction()` the same action ID, it
+consumes the stale flag and reacts to a trigger left over from the aborted
+attempt.
+
+**Proposed fix:** add a `ClearActionFlags()` (or fold into `ClearSchedule()`)
+that resets all of `action_flags[]`, and call it from every mode's
+`*_ERROR_LANDING` (and `*_SHUTDOWN_LANDING`), not just Flight's. A more complete
+fix would give the scheduler per-instance cancellation (e.g. a token returned
+from `AddAction`, or dedupe-on-schedule as already proposed in §3) rather than
+the current all-or-nothing queue clear plus separate, unrelated flag array.
 
 ---
 

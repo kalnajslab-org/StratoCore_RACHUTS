@@ -101,6 +101,10 @@ and the `MEMORY.md` notes.
    from 14 to 9**. `SENDSTATE` reports the raw number and runbooks/§11 say
    "substate 14 = error loop." **Mitigation:** explicitly pin values —
    `FL_ERROR_LOOP = 14, FL_SHUTDOWN_LOOP = 15` — so the numbers survive deletion.
+   *(Update, 2026-07-31: unpinned. Nothing in the firmware itself depended on the
+   number, the system is pre-deployment, and the only justification was operator
+   familiarity — judged not worth the standing exception. `FL_ERROR_LOOP` is now
+   9, `FL_SHUTDOWN_LOOP` is 10. See `FlightModeControlFlow.md`.)*
 
 3. **Shared vendored `Telecommand.h`.** That enum is common to RATS/DIB/ground.
    **Do not remove or renumber** the IDs — leave `SETAUTO=130 … SETTIMETRIGGER=140`
