@@ -1,54 +1,71 @@
-# StratoPIB
+# StratoCore_RATCHUTS
 
-This repository contains the code to run the Profiler Interface Board (PIB) on the Reeldown Aerosol, Clouds, Humidity, and Temperature Sensor (RACHuTS) flown by [LASP](https://lasp.colorado.edu/home/) on the CNES [Stratéole 2](https://strat2.org/) super-pressure balloon campaign. StratoPIB inherits functionality from [StratoCore](https://github.com/dastcvi/StratoCore). To understand StratoPIB, first read the documentation for StratoCore.
+This repository contains the code to run the Profiler Interface Board (PIB) on the Reeldown Aerosol, Clouds, Humidity, and Temperature Sensor (RACHuTS) flown by [LASP](https://lasp.colorado.edu/home/) on the CNES [Stratéole 2](https://strat2.org/) super-pressure balloon campaign. StratoPIB inherits functionality from [StratoCore](https://github.com/kalnajslab-org/StratoCore). To understand StratoPIB, first read the documentation for StratoCore.
+
+> The [kalnajslab-org](https://github.com/kalnajslab-org) repositories linked
+> throughout this document (StratoCore, SerialComm, MCBComm, TeensyEEPROM,
+> StrateoleXML, MCB_T4.1, OBC_Simulator, PUCode) are forks of the original
+> [dastcvi](https://github.com/dastcvi) repositories.
 
 ## Software Development Environment
 
-All of the instruments use [Teensy 3.6](https://www.sparkfun.com/products/14057) Arduino-compatible MCU boards as the primary computer. Thus, this and all other Strateole 2 code is implemented for Arduino, meaning that all of this C++ code uses the Arduino drivers for the Teensy 3.6 and is compiled using the Arduino IDE with the [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html) plug-in.
+> This system was upgraded from Teensy 3.6 to [Teensy 4.1](https://www.pjrc.com/teensy/).
 
-The Arduino main file can be found in `examples/StratoPIB_Main.ino`. To compile and load StratoPIB, open this main file in Arduino and follow the Teensyduino instructions.
+All of the instruments use [Teensy 4.1](https://www.pjrc.com/teensy/) Arduino-compatible MCU boards as the primary computer. This project has migrated from the Arduino IDE to [PlatformIO](https://platformio.org/): the code uses the Arduino framework/drivers for the Teensy 4.1, but is built via PlatformIO's `teensy41` board definition rather than the Arduino IDE + [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html) plug-in (see `platformio.ini`).
 
-*StratoPIB is known to work with Arduino 1.8.4 and Teensyduino 1.39, as well as with Arduino 1.8.11 and Teensyduino 1.51*
+The main sketch file is `StratoCore_RATCHUTS.ino` at the repository root. To build, use the PlatformIO `rachuts` environment, e.g. `pio run -e rachuts`.
 
 ## RACHuTS Overview
 
-RACHuTS is a unique instrument designed and built in LASP's Kalnajs Lab to perform in-situ profiles of up to two kilometers below a balloon platform by reeling down a sensor suite and then reeling it back up. Below is a simplified electronics block diagram of the system. The Profiler Interface Board (PIB), runs the StratoPIB software. The Motor Control Board software is in the [MCB](https://github.com/dastcvi/MCB) repository. The Profiling Unit software is in the [PUCode](https://github.com/kalnajslab/PUCode) repository. The motion controllers are commercial-off-the-shelf components from [Technosoft](https://technosoftmotion.com/en/home/).
+RACHuTS is a unique instrument designed and built in LASP's Kalnajs Lab to perform in-situ profiles of up to two kilometers below a balloon platform by reeling down a sensor suite and then reeling it back up. Below is a simplified electronics block diagram of the system. The Profiler Interface Board (PIB), runs the StratoPIB software. The Motor Control Board software is in the [MCB](https://github.com/kalnajslab-org/MCB_T4.1) repository. The Profiling Unit software is in the [PUCode](https://github.com/kalnajslab-org/PUCode) repository. The motion controllers are commercial-off-the-shelf components from [Technosoft](https://technosoftmotion.com/en/home/).
 
-<img src="/Documentation/ElectronicsFBD.png" alt="/Documentation/ElectronicsFBD.png" width="900"/>
+<img src="/Documentation/images/ElectronicsFBD.png" alt="/Documentation/images/ElectronicsFBD.png" width="900"/>
 
 ## Testing
 
-The [OBC Simulator](https://github.com/dastcvi/OBC_Simulator) is a piece of software developed specifically for LASP Stratéole 2 instrument testing using only the Teensy 3.6 USB port. It provides the full OBC interface to allow extensive testing. StratoCore must be configured (via its constructor) to use the `&Serial` pointer for both `zephyr_serial` and `debug_serial`, and the OBC Simulator will separately display Zephyr and debug messages, color-coded by severity.
+Testing is now performed with the [ZephyrSim](https://github.com/kalnajslab-org/ZephyrSim) simulator.
+
+> The previous shared-serial-port configuration is deprecated: StratoCore
+> no longer expects a single `&Serial` pointer passed for both
+> `zephyr_serial` and `debug_serial`. **Both a dedicated Zephyr serial
+> connection and a Teensy USB `Serial` connection are required.**
+> `StratoRatchuts` is constructed with `ZEPHYR_SERIAL` (`Serial1`) for the
+> Zephyr link and `DEBUG_SERIAL` (`Serial`, the Teensy USB port) for debug
+> output (see `PIBHardware.h`).
+
+**Caveat:** the system must *also* be tested against the canonical CNES
+[OBC Simulator](https://github.com/kalnajslab-org/OBC_Simulator) — testing
+against ZephyrSim alone is not sufficient validation before flight.
 
 ## Components
 
-The diagram below shows how StratoPIB extends the [StratoCore Components](https://github.com/dastcvi/StratoCore#components) to suit the needs of RACHuTS. All of the requisite pure virtual functions are implemented (mode functions, telecommand handler, action handler, etc.), and StratoPIB adds a few major components: the MCB Router, PU Router, and Configuration Manager.
+The diagram below shows how StratoPIB extends the [StratoCore Components](https://github.com/kalnajslab-org/StratoCore#components) to suit the needs of RACHuTS. All of the requisite pure virtual functions are implemented (mode functions, telecommand handler, action handler, etc.), and StratoPIB adds a few major components: the MCB Router, PU Router, and Configuration Manager.
 
-<img src="/Documentation/StratoPIBComponents.png" alt="/Documentation/StratoPIBComponents.png" width="900"/>
+<img src="/Documentation/images/StratoPIBComponents.png" alt="/Documentation/images/StratoPIBComponents.png" width="900"/>
 
 ## MCB and PU Routers
 
-The MCB and PU are both able to be communicated with over TTL UART (the PU only if it is docked). Each interface is defined using classes that derive from [SerialComm](https://github.com/dastcvi/SerialComm), which is a simple, robust protocol for inter-Arduino serial communication. These interfaces are [MCBComm](https://github.com/dastcvi/MCBComm) and [PUComm](https://github.com/kalnajslab/PUCode).
+The MCB and PU are both able to be communicated with over TTL UART (the PU only if it is docked). Each interface is defined using classes that derive from [SerialComm](https://github.com/kalnajslab-org/SerialComm), which is a simple, robust protocol for inter-Arduino serial communication. These interfaces are [MCBComm](https://github.com/kalnajslab-org/MCBComm) and [PUComm](https://github.com/kalnajslab-org/PUCode).
 
 A router is implemented for each the MCBComm and the PUComm that checks for new messages and handles them accordingly. The routers are called each main loop in the Arduino file right after the Zephyr OBC router.
 
 ## PIB Buffer Guard
 
-All of the serial routers (Zephyr OBC, MCB, and PU) depend on configurable buffering implemented in the Arduino Teensy core libraries (see the [explanation in SerialComm](https://github.com/dastcvi/SerialComm#aside-on-arduinos-internal-serial-buffering)). The `PIBBufferGuard.h` file contains macros that ensure that the buffers have been correctly set, otherwise the macros will throw a compile-time error. On any computer that uses a Teensy where buffers are updated or memory is limited, it is recommended that you use a buffer guard like this for every project.
+All of the serial routers (Zephyr OBC, MCB, and PU) depend on configurable buffering implemented in the Arduino Teensy core libraries (see the [explanation in SerialComm](https://github.com/kalnajslab-org/SerialComm#aside-on-arduinos-internal-serial-buffering)). The `PIBBufferGuard.h` file contains macros that ensure that the buffers have been correctly set, otherwise the macros will throw a compile-time error. On any computer that uses a Teensy where buffers are updated or memory is limited, it is recommended that you use a buffer guard like this for every project.
 
 ## Configuration Manager
 
-Important configurations are stored in EEPROM on the PIB. The EEPROM storage is maintained by the `PIBConfigs` class, which derives from [TeensyEEPROM](https://github.com/dastcvi/TeensyEEPROM). This library is a wrapper for the core EEPROM library that protects against EEPROM failure. A hard-coded default for each configuration is maintained in FLASH memory, and a mutable runtime variable exists for each in RAM. Thus, if the EEPROM fails, the configurations can still be changed in RAM and will update to a default value on a processor reset. The configurations can be changed via telecommands.
+Important configurations are stored in EEPROM on the PIB. The EEPROM storage is maintained by the `PIBConfigs` class, which derives from [TeensyEEPROM](https://github.com/kalnajslab-org/TeensyEEPROM). This library is a wrapper for the core EEPROM library that protects against EEPROM failure. A hard-coded default for each configuration is maintained in FLASH memory, and a mutable runtime variable exists for each in RAM. Thus, if the EEPROM fails, the configurations can still be changed in RAM and will update to a default value on a processor reset. The configurations can be changed via telecommands.
 
 ## Action Handler
 
-StratoCore necessitates an action handler for actions scheduled in the [Scheduler](https://github.com/dastcvi/StratoCore#scheduler). The action handler is a function called each time a scheduled action becomes ready. StratoPIB implements an "action flag" concept, which is just an enumerated boolean flag that goes stale (gets reset back to `false`) if it hasn't been read after a configurable number of loops (currently 3). This way, a mode function can set a flag, but the software designer doesn't have to handle the case of the mode being switched by StratoCore and the flag being left unchecked. The diagram below shows the "action flag" concept (the flag monitor is called automatically in the `InstrumentLoop` function):
+StratoCore necessitates an action handler for actions scheduled in the [Scheduler](https://github.com/kalnajslab-org/StratoCore#scheduler). The action handler is a function called each time a scheduled action becomes ready. StratoPIB implements an "action flag" concept, which is just an enumerated boolean flag that goes stale (gets reset back to `false`) if it hasn't been read after a configurable number of loops (currently 3). This way, a mode function can set a flag, but the software designer doesn't have to handle the case of the mode being switched by StratoCore and the flag being left unchecked. The diagram below shows the "action flag" concept (the flag monitor is called automatically in the `InstrumentLoop` function):
 
-<img src="/Documentation/ActionHandler.png" alt="/Documentation/ActionHandler.png" width="900"/>
+<img src="/Documentation/images/ActionHandler.png" alt="/Documentation/images/ActionHandler.png" width="900"/>
 
 ## Telecommand Handler
 
-Telecommands are handled in the `TCHandler.cpp` file. Typical telecommands will either cause actions to be scheduled or configurations to be changed. See [StratoCore Telecommand Handling](https://github.com/dastcvi/StratoCore#telecommand-handling) for a detailed look at how telecommands work, and see [StrateoleXML](https://github.com/dastcvi/StrateoleXML).
+Telecommands are handled in the `TCHandler.cpp` file. Typical telecommands will either cause actions to be scheduled or configurations to be changed. See [StratoCore Telecommand Handling](https://github.com/kalnajslab-org/StratoCore#telecommand-handling) for a detailed look at how telecommands work, and see [StrateoleXML](https://github.com/kalnajslab-org/StrateoleXML).
 
 ## Flight Mode
 
@@ -82,7 +99,7 @@ Manual mode is the default state of the instrument, though this can be changed i
 
 Autonomous mode is used to automatically run a number of preconfigured profiles each night, according to the configurations set in `PIBConfigs`. Below is a simplified flowchart for the mode.
 
-<img src="/Documentation/AutonomousMode.png" alt="/Documentation/AutonomousMode.png" width="900"/>
+<img src="/Documentation/images/AutonomousMode.png" alt="/Documentation/images/AutonomousMode.png" width="900"/>
 
 ### TSEN Scheduling
 
