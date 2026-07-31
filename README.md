@@ -19,7 +19,7 @@ The main sketch file is `StratoCore_RATCHUTS.ino` at the repository root. To bui
 
 RACHuTS is a unique instrument designed and built in LASP's Kalnajs Lab to perform in-situ profiles of up to two kilometers below a balloon platform by reeling down a sensor suite and then reeling it back up. Below is a simplified electronics block diagram of the system. The Profiler Interface Board (PIB), runs the StratoPIB software. The Motor Control Board software is in the [MCB](https://github.com/kalnajslab-org/MCB_T4.1) repository. The Profiling Unit software is in the [PUCode](https://github.com/kalnajslab-org/PUCode) repository. The motion controllers are commercial-off-the-shelf components from [Technosoft](https://technosoftmotion.com/en/home/).
 
-<img src="/Documentation/images/ElectronicsFBD.png" alt="/Documentation/images/ElectronicsFBD.png" width="900"/>
+<img src="/docs/images/ElectronicsFBD.png" alt="/docs/images/ElectronicsFBD.png" width="900"/>
 
 ## Testing
 
@@ -41,7 +41,7 @@ against ZephyrSim alone is not sufficient validation before flight.
 
 The diagram below shows how StratoPIB extends the [StratoCore Components](https://github.com/kalnajslab-org/StratoCore#components) to suit the needs of RACHuTS. All of the requisite pure virtual functions are implemented (mode functions, telecommand handler, action handler, etc.), and StratoPIB adds a few major components: the MCB Router, PU Router, and Configuration Manager.
 
-<img src="/Documentation/images/StratoPIBComponents.png" alt="/Documentation/images/StratoPIBComponents.png" width="900"/>
+<img src="/docs/images/StratoPIBComponents.png" alt="/docs/images/StratoPIBComponents.png" width="900"/>
 
 ## MCB and PU Routers
 
@@ -61,7 +61,7 @@ Important configurations are stored in EEPROM on the PIB. The EEPROM storage is 
 
 StratoCore necessitates an action handler for actions scheduled in the [Scheduler](https://github.com/kalnajslab-org/StratoCore#scheduler). The action handler is a function called each time a scheduled action becomes ready. StratoPIB implements an "action flag" concept, which is just an enumerated boolean flag that goes stale (gets reset back to `false`) if it hasn't been read after a configurable number of loops (currently 3). This way, a mode function can set a flag, but the software designer doesn't have to handle the case of the mode being switched by StratoCore and the flag being left unchecked. The diagram below shows the "action flag" concept (the flag monitor is called automatically in the `InstrumentLoop` function):
 
-<img src="/Documentation/images/ActionHandler.png" alt="/Documentation/images/ActionHandler.png" width="900"/>
+<img src="/docs/images/ActionHandler.png" alt="/docs/images/ActionHandler.png" width="900"/>
 
 ## Telecommand Handler
 
@@ -99,7 +99,7 @@ Manual mode is the default state of the instrument, though this can be changed i
 
 Autonomous mode is used to automatically run a number of preconfigured profiles each night, according to the configurations set in `PIBConfigs`. Below is a simplified flowchart for the mode.
 
-<img src="/Documentation/images/AutonomousMode.png" alt="/Documentation/images/AutonomousMode.png" width="900"/>
+<img src="/docs/images/AutonomousMode.png" alt="/docs/images/AutonomousMode.png" width="900"/>
 
 ### TSEN Scheduling
 

@@ -1,6 +1,6 @@
 # Typical daily operating schedule for RACHuTS in fully operational flight
 
-> TC numbers/names per `Documentation/TelecommandCribSheet.md`. `MANUALPROFILE`,
+> TC numbers/names per `docs/TelecommandCribSheet.md`. `MANUALPROFILE`,
 > `DOCKEDPROFILE`, and `RPUCONFIG` run in flight mode. Autonomous mode and the
 > `SETAUTO`/`SETMANUAL` selection were removed — the original version of this doc
 > called for `131 SETMANUAL` to be sent, but with those removals it is not
