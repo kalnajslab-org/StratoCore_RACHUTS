@@ -360,6 +360,75 @@ fix would give the scheduler per-instance cancellation (e.g. a token returned
 from `AddAction`, or dedupe-on-schedule as already proposed in §3) rather than
 the current all-or-nothing queue clear plus separate, unrelated flag array.
 
+### 13a. Re-entering a sub-machine before its own prior scheduled actions fire duplicates them in the queue
+
+A more directly reachable variant of the same root cause — no fault required,
+just re-invoking the same command. `scheduler.AddAction()` → `SchedulePush()`
+never checks whether an entry for that `action` type is already queued; it
+unconditionally allocates and links a new node. So restarting a sub-machine
+(`restart_state = true`) while an earlier run's own scheduled action is still
+pending produces **two independent queue entries for the same action type**,
+each counting down to its own fire time.
+
+**Concrete trace, using `Flight_ReDock`** (the sub-machine that most visibly
+front-loads scheduled actions, in `ST_ENTRY`):
+
+```cpp
+case ST_ENTRY:
+    redock_state = ST_IDLE;
+    SetAction(ACTION_REEL_OUT);
+    scheduler.AddAction(ACTION_IN_NO_LW, 30);
+    scheduler.AddAction(ACTION_CHECK_PU, 60);
+```
+
+1. TC 142 (`RETRYDOCK`) → `Flight_ReDock(true)` → `ACTION_IN_NO_LW`@+30s and
+   `ACTION_CHECK_PU`@+60s go on the queue.
+2. Redock finishes quickly (docked confirmed at, say, +10s) → returns `true` →
+   back to `FLM_IDLE`. Nothing clears the queue on this ordinary, successful
+   return — `ACTION_IN_NO_LW`/`ACTION_CHECK_PU` are still queued, due at their
+   original +30s/+60s.
+3. Another TC 142 arrives before those fire → `Flight_ReDock(true)` runs again;
+   `ST_ENTRY` re-adds `ACTION_IN_NO_LW`@+30s and `ACTION_CHECK_PU`@+60s a
+   **second time**.
+4. The queue now holds two independent entries for each action, with different
+   fire times. When the *first* run's stale entry eventually pops,
+   `ActionHandler` sets that flag regardless of what the *second* run's state
+   machine is currently doing — a premature or duplicate trigger indistinguishable
+   from the legitimate one.
+
+**This is easily reachable via `CANCELMOTION` (TC 11), and inconsistently so**
+— the three motion sub-machines handle it differently:
+
+```cpp
+// Flight_ManualMotion.cpp / Flight_ReDock.cpp, ST_MONITOR_MOTION — identical:
+if (CheckAction(ACTION_MOTION_STOP)) {
+    SendTextTM("Commanded motion stop", FINE);
+    return true;              // clean finish -- no scheduler touch at all
+}
+
+// Flight_Profile.cpp, ST_MONITOR_MOTION -- different:
+if (CheckAction(ACTION_MOTION_STOP)) {
+    SendTextTM("Commanded motion stop in autonomous", WARN);
+    inst_substate = MODE_ERROR;   // escalates -> FL_ERROR_LANDING -> ClearSchedule()
+    break;
+}
+```
+
+`Flight_ManualMotion` and `Flight_ReDock` treat a cancel as a clean success —
+no `MODE_ERROR`, so no `ClearSchedule()` anywhere in that path; anything
+already scheduled and not yet fired stays queued. `Flight_Profile`'s cancel
+happens to get the queue cleared only as a side effect of being classified as
+an error (which routes through Flight's `FL_ERROR_LANDING`) — not from any
+deliberate cleanup logic. So a cancel-and-retry on a manual motion or a redock
+is a live, easily reproduced way to hit this; a cancel-and-retry on a profile
+incidentally isn't (today), by accident rather than by design.
+
+**Proposed fix:** same as above (§13) — either give `AddAction` dedupe
+semantics (reschedule an existing entry for the same action type instead of
+adding a second one), or make `ClearSchedule()`/`ClearActionFlags()` run
+consistently on every sub-machine's clean return, not just on `MODE_ERROR`
+paths.
+
 ---
 
 ## Appendix A — RACHUTS Telemetry (TM) catalog
