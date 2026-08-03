@@ -169,6 +169,7 @@ bool StratoRatchuts::Flight_Profile(bool restart_state)
         if (mcb_motion_ongoing) { // set in MCBRouter when MCB acks motion command
             SendTextTM("Motion commanded while motion ongoing", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
+            break;
         }
 
         if (StartMCBMotion()) {

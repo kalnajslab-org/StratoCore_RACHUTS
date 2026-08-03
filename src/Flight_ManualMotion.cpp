@@ -60,6 +60,7 @@ bool StratoRatchuts::Flight_ManualMotion(bool restart_state)
         if (mcb_motion_ongoing) {
             SendTextTM("Motion commanded while motion ongoing", WARN);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
+            break;
         }
 
         if (StartMCBMotion()) {
