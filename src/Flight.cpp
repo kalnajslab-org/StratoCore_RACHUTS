@@ -61,6 +61,7 @@ void StratoRatchuts::FlightMode()
         break;
     case FL_ERROR_LANDING:
         log_error("Landed in flight error");
+        SendTextTM("Entered flight error state", CRIT);
         scheduler.ClearSchedule();
         mcb_motion_ongoing = false;
         mcb_motion = NO_MOTION;

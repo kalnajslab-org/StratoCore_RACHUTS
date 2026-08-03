@@ -410,6 +410,8 @@ void StratoRatchuts::SendMCBTM(const char * TMname, StateFlag_t state_flag, cons
     TM_ack_flag = NO_ACK;
     ZephyrTXpoke(ZEPHYRTX_TM);
 
+    if (state_flag == FINE) log_nominal(message); else log_error(message);
+
     MCB_TM_buffer_idx = 0;
     if (!WriteFileTM("MCB")) {
         log_error("Unable to write MCB TM to SD file");
