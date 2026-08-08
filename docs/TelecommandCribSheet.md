@@ -63,6 +63,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 153 | DOCKEDPROFILE | Execute a docked profile (**flight only**) | duration (s) |
 | 154 | STARTREALTIMEMCB | Enable real-time MCB data streaming | — |
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
+| 156 | CANCELMEASURE | Cancel an in-progress docked profile (sends RPU to standby, offloads what was collected) | — |
 
 ## RPU (Profiler) dock control
 

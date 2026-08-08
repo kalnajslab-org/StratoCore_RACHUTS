@@ -262,6 +262,11 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
             pibConfigs.real_time_mcb.Write(false);
         }
         break;
+    case CANCELMEASURE:
+        msg2 = "TC Cancel Measure";
+        puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read()); // no matter what, attempt to send (irrespective of mode)
+        SetAction(ACTION_CANCEL_MEASURE);
+        break;
 
     // PU Telecommands ------------------------------------
     case RPUBATTEMP:

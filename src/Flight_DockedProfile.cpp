@@ -20,12 +20,22 @@ bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
 {
     if (restart_state) profile_state = ST_ENTRY;
 
+    // Checked every state (not just one, per the KnownIssues §14 pitfall) so a
+    // cancel takes effect regardless of which phase the profile is in. The RPU
+    // is already commanded to standby unconditionally in TCHandler; this just
+    // stops the state machine from continuing to wait on it.
+    if (CheckAction(ACTION_CANCEL_MEASURE)) {
+        SendTextTM("Docked profile cancelled", FINE);
+        SetAction(ACTION_OFFLOAD_PU);
+        return true;
+    }
+
     switch (profile_state) {
     case ST_ENTRY:
     case ST_GO_MEASURE:
         pu_measure = false;
         resend_attempted = false;
-        puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(),
+        puComm.TX_GoMeasure(docked_profile_time,
                             pibConfigs.rpu_meas_rate.Read(),
                             pibConfigs.rpu_bat_temp.Read(),
                             pibConfigs.rpu_enable_ROPC.Read(),
@@ -39,7 +49,11 @@ bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
     case ST_CONFIRM_GO_MEASURE:
         if (pu_measure) {
             pibConfigs.profile_id.Write(pibConfigs.profile_id.Read() + 1);
-            scheduler.AddAction(ACTION_END_PREPROFILE, docked_profile_time);
+            // The RPU's go-measure duration is also docked_profile_time, so it
+            // should already be returning to standby on its own; give it a
+            // couple seconds' head start before RACHUTS's own timer also sends
+            // it to standby as a backup, so it's enforced in two places.
+            scheduler.AddAction(ACTION_END_PREPROFILE, docked_profile_time + 2);
             profile_state = ST_MEASURE_WAIT;
         } else if (CheckAction(RESEND_PU_GOPROFILE)) {
             if (!resend_attempted) {
@@ -56,10 +70,8 @@ bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
     case ST_MEASURE_WAIT:
         if (CheckAction(ACTION_END_PREPROFILE)) {
             SendTextTM("Finished docked profile", FINE);
-            if (pibConfigs.pu_auto_offload.Read()) {
-                Serial.println("Begin Automatic PU Offload");
-                SetAction(ACTION_OFFLOAD_PU);
-            }
+            puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read());
+            SetAction(ACTION_OFFLOAD_PU);
             return true;
         }
         break;

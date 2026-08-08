@@ -25,7 +25,7 @@ public:
     PIBConfigs();
 
     // constants, manually change version number here to force update
-    static const uint16_t CONFIG_VERSION = 0x5C06;
+    static const uint16_t CONFIG_VERSION = 0x5C07;
     static const uint16_t BASE_ADDRESS = 0x0000;
 
     // ------------------ Configurations ------------------
@@ -72,7 +72,6 @@ public:
     
     EEPROMData<uint16_t> profile_id;
     EEPROMData<bool> ra_override;
-    EEPROMData<bool> pu_auto_offload;
 
     // ----------------------------------------------------
 

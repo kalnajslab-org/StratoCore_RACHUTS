@@ -39,7 +39,6 @@ PIBConfigs::PIBConfigs()
     , lora_tx_status(1800)
     , profile_id(1)
     , ra_override(false)
-    , pu_auto_offload(false)
     // ----------------------------------------------------
 { }
 
@@ -74,7 +73,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&lora_tx_status);
     success &= Register(&profile_id);
     success &= Register(&ra_override);
-    success &= Register(&pu_auto_offload);
 
     if (!success) {
         debug_serial->println("Error registering EEPROM configs");
