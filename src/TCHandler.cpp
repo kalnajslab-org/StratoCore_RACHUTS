@@ -241,7 +241,13 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         msg2 = "TC Docked Profile";
         if (!RequireFlightMode("Docked profile", msg3, msg1_flag)) break;
         docked_profile_time = pibParam.dockedProfileTime;
-        msg2 += ": " + String(docked_profile_time) + "s";
+        docked_profile_rate = pibParam.dockedProfileRate;
+        msg2 += ": length=" + String(docked_profile_time) + "s"
+              + " rate=" + String(docked_profile_rate) + "s"
+              + " ROPC=" + String(pibConfigs.rpu_enable_ROPC.Read())
+              + " TDLAS=" + String(pibConfigs.rpu_enable_TDLAS.Read())
+              + " TSEN=" + String(pibConfigs.rpu_enable_TSEN.Read())
+              + " RS41=" + String(pibConfigs.rpu_enable_RS41.Read());
         SetAction(COMMAND_DOCKED_PROFILE);
         break;
     case STARTREALTIMEMCB:

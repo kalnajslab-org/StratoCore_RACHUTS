@@ -36,7 +36,7 @@ bool StratoRatchuts::Flight_DockedProfile(bool restart_state)
         pu_measure = false;
         resend_attempted = false;
         puComm.TX_GoMeasure(docked_profile_time,
-                            pibConfigs.rpu_meas_rate.Read(),
+                            docked_profile_rate,
                             pibConfigs.rpu_bat_temp.Read(),
                             pibConfigs.rpu_enable_ROPC.Read(),
                             pibConfigs.rpu_enable_TDLAS.Read(),

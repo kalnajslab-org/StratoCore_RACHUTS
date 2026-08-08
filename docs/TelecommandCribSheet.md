@@ -60,7 +60,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 149 | SETPUWARMUPTIME | PU warmup time | time (uint16, s) |
 | 150 | AUTOREDOCKPARAMS | Auto-redock parameters | redock out (rev), redock in (rev), max retries |
 | 151 | SETMOTIONTIMEOUT | Motion timeout | timeout (uint16, s) |
-| 153 | DOCKEDPROFILE | Execute a docked profile (**flight only**) | duration (s) |
+| 153 | DOCKEDPROFILE | Execute a docked profile (**flight only**) | duration (s), rate (s) |
 | 154 | STARTREALTIMEMCB | Enable real-time MCB data streaming | — |
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
 | 156 | CANCELMEASURE | Cancel an in-progress docked profile (sends RPU to standby, offloads what was collected) | — |
@@ -80,11 +80,14 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 185 | RPUGOMEASURE | Command RPU to MEASURE | duration (s), rate (s) |
 
 Notes:
-- **RPUCONFIG / RPUGOMEASURE validation:** `rate` must be > 0; a nonzero
-  `duration` must be greater than `rate` (else the TC is NAK'd). `duration = 0`
-  means "run until commanded to STANDBY / record buffer full."
+- **RPUCONFIG / RPUGOMEASURE / DOCKEDPROFILE validation:** `rate` must be > 0;
+  a nonzero `duration` must be greater than `rate` (else the TC is NAK'd).
+  `duration = 0` means "run until commanded to STANDBY / record buffer full."
 - **TC 185 (RPUGOMEASURE)** now carries `duration`/`rate` directly; battery
   setpoint and sensor-enable flags come from the stored RPUCONFIG.
+- **TC 153 (DOCKEDPROFILE)** likewise carries `duration`/`rate` directly
+  (not persisted to EEPROM); sensor-enable flags and battery setpoint still
+  come from the stored RPUCONFIG.
 
 ## Diagnostics / EEPROM
 

@@ -271,8 +271,9 @@ private:
     float retract_length = 0.0f;
     float dock_length = 0.0f;
 
-    // current docked profile duration
+    // current docked profile duration and sample rate
     uint16_t docked_profile_time = 0;
+    uint16_t docked_profile_rate = 0;
 
     // array of error values for MCB motion fault
     uint16_t motion_fault[8] = {0};
