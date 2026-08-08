@@ -175,9 +175,10 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
     case RETRYDOCK:
         msg2 = "TC Retry Dock";
         if (!RequireFlightMode("Retry dock", msg3, msg1_flag)) break;
-        SetAction(COMMAND_REDOCK);
         deploy_length = mcbParam.deployLen;
         retract_length = mcbParam.retractLen;
+        msg2 += ": deploy=" + String(deploy_length, 1) + " revs, retract=" + String(retract_length, 1) + " revs";
+        SetAction(COMMAND_REDOCK);
         break;
     case GETPUSTATUS:
         msg2 = "TC Get PU Status";
@@ -199,6 +200,8 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
         pibConfigs.dwell_time.Write(pibParam.dwellTime);
+        msg2 += ": size=" + String(pibParam.profileSize, 1) + " revs, dock=" + String(pibParam.dockAmount, 1)
+              + " revs, overshoot=" + String(pibParam.dockOvershoot, 1) + " revs, dwell=" + String(pibParam.dwellTime) + "s";
         SetAction(COMMAND_MANUAL_PROFILE);
         break;
     case OFFLOADPUPROFILE:
@@ -238,6 +241,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         msg2 = "TC Docked Profile";
         if (!RequireFlightMode("Docked profile", msg3, msg1_flag)) break;
         docked_profile_time = pibParam.dockedProfileTime;
+        msg2 += ": " + String(docked_profile_time) + "s";
         SetAction(COMMAND_DOCKED_PROFILE);
         break;
     case STARTREALTIMEMCB:
