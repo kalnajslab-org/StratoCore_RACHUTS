@@ -431,6 +431,61 @@ paths.
 
 ---
 
+## 14. `CANCELMOTION` only cancels a profile during its motion-in-progress window — **PARTIALLY FIXED**
+
+`CANCELMOTION` (TC 11) sets `ACTION_MOTION_STOP` unconditionally, but
+`Flight_Profile` only calls `CheckAction(ACTION_MOTION_STOP)` in **one** of its
+12 states — `ST_MONITOR_MOTION` (entered while a reel-out/reel-in/dock motion
+is physically underway, after `ST_START_MOTION`/`ST_VERIFY_MOTION`). Every
+other state ignores it: the RA handshake (`ST_SEND_RA`/`ST_WAIT_RAACK`), the PU
+go-measure handshake (`ST_SET_PU_PROFILE`/`ST_CONFIRM_PU_PROFILE`), the
+pre-profile wait (`ST_PREPROFILE_WAIT`), the dwell wait (`ST_DWELL`), the
+dock-wait timer (`ST_DOCK_WAIT`), the post-dock PU check
+(`ST_GET_PU_STATUS`/`ST_VERIFY_DOCK`/`ST_REDOCK`), and the final MCB-low-power
+confirm (`ST_CONFIRM_MCB_LP`).
+
+So `CANCELMOTION` only actually cancels a profile while the reel happens to be
+mid-motion. Sent during any other phase (e.g. mid-dwell), the flag isn't read
+there — it either goes stale after 3 loops (`WatchFlags`) and is silently
+dropped, or **survives until the profile later reaches `ST_MONITOR_MOTION` for
+a subsequent, unrelated motion leg** (e.g. the reel-in after dwell) and cancels
+*that* instead — a stale, misdirected cancel with no relationship to what was
+actually intended. Same family as §13/§13a: a flag set once, consumed
+opportunistically by whichever state happens to poll for it, with no
+per-request scoping.
+
+Related, and the reason this was found: `Flight_DockedProfile` has **no** cancel
+handling at all (see the "docked profile has no motion" discussion) — arguably
+correct in spirit, since `ACTION_MOTION_STOP` is the wrong verb for stopping an
+in-place RPU measurement, but the practical effect is that neither operation
+can be reliably cancelled mid-flight from the ground.
+
+**Fix (docked profile only):** added `CANCELMEASURE` (TC 156) — a dedicated,
+correctly-named cancel, distinct from `CANCELMOTION` (TC 11), since
+`ACTION_MOTION_STOP` is the wrong verb for stopping an in-place RPU
+measurement. It unconditionally sends the RPU to standby (`TX_GoStandby`, same
+as `RPUGOSTANDBY`) and sets a new `ACTION_CANCEL_MEASURE` flag.
+`Flight_DockedProfile` checks that flag **once, at the top of the function,
+ahead of the state switch** — deliberately not state-specific, to avoid
+exactly this issue's own failure mode — so a cancel takes effect immediately
+regardless of which phase (go-measure handshake or measure-wait) the profile
+is in, sends the collected data to offload, and returns.
+
+**Still open (manual profile):** `Flight_Profile`'s per-state gap is
+unchanged — `CANCELMOTION` still only works during `ST_MONITOR_MOTION`.
+`CANCELMEASURE` is **not** the right tool here and should not be wired in:
+it's specifically an RPU-directed command (`TX_GoStandby`), and a manual
+profile in progress isn't fundamentally an RPU-communication operation the way
+a docked profile is — most of its states are driven by MCB motion or local
+timers, not by waiting on the RPU. `CANCELMOTION`/`ACTION_MOTION_STOP` remains
+the semantically correct mechanism for `Flight_Profile`; the actual fix is
+extending the `CheckAction(ACTION_MOTION_STOP)` check to every waiting state
+(the RA handshake, PU go-measure handshake, pre-profile wait, dwell wait,
+dock-wait timer, post-dock PU check, MCB-low-power confirm), not just
+`ST_MONITOR_MOTION`. Deferred to later.
+
+---
+
 ## Appendix A — RACHUTS Telemetry (TM) catalog
 
 Every RACHUTS TM is a Zephyr/StrateoleXML telemetry message identified on the
