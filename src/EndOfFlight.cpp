@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS end of flight mode.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 enum EFStates_t : uint8_t {
     EF_ENTRY = MODE_ENTRY,
@@ -19,7 +19,7 @@ enum EFStates_t : uint8_t {
     EF_EXIT = MODE_EXIT
 };
 
-void StratoRatchuts::EndOfFlightMode()
+void StratoRachuts::EndOfFlightMode()
 {
     mode_code = "EF";
     switch (inst_substate) {

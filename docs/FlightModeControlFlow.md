@@ -37,7 +37,7 @@ TM already sent by the sub-machine before it returned `true`.
 ```mermaid
 stateDiagram-v2
     [*] --> FL_ENTRY
-    FL_ENTRY --> FL_GPS_WAIT: force_ratchutsreport=true
+    FL_ENTRY --> FL_GPS_WAIT: force_rachutsreport=true
     FL_GPS_WAIT --> FLM_IDLE: time_valid
     FLM_IDLE --> FLM_IDLE: dispatch sub-machine (see below)
 
@@ -57,7 +57,7 @@ stateDiagram-v2
 
 | Substate | Value | Purpose |
 |---|---|---|
-| `FL_ENTRY` | `MODE_ENTRY` (0) | Logs entry, sets `force_ratchutsreport`, advances immediately. |
+| `FL_ENTRY` | `MODE_ENTRY` (0) | Logs entry, sets `force_rachutsreport`, advances immediately. |
 | `FL_GPS_WAIT` | 1 | Blocks until `time_valid` (first Zephyr GPS message). Every other substate assumes valid time. |
 | `FLM_IDLE` … `FLM_DOCKED` | 2–8 | The `FLM_IDLE` routing table, detailed below. |
 | `FL_ERROR_LOOP` | 9 | Parking state after a fault. MCB is repeatedly commanded to low power until `EXIT_ERROR_STATE` (TC 201) is received. |
@@ -76,7 +76,7 @@ renumber naturally (**9**, following directly after `FLM_DOCKED`). See
 no-op while parked in `FL_ERROR_LOOP`, because `RequireFlightMode` only checks
 `mode_code == "FL"`).
 
-`SendPeriodicRATCHUTSREPORT()` runs at the very top of `FlightMode()`, before
+`SendPeriodicRACHUTSREPORT()` runs at the very top of `FlightMode()`, before
 the substate switch — so it fires every loop regardless of substate, including
 inside `FL_ERROR_LOOP`.
 
@@ -121,7 +121,7 @@ case FLM_MANUAL_MOTION:
 ```
 
 `FLM_CHECK_PU` is the one exception with extra logic: on success it also sets
-`force_ratchutsreport = true` so a fresh status report goes out promptly
+`force_rachutsreport = true` so a fresh status report goes out promptly
 without blocking on the periodic timer.
 
 `CANCELMOTION` (TC 11) is handled outside this table — it sets
@@ -202,10 +202,10 @@ stateDiagram-v2
     ST_MONITOR_MOTION --> MODE_ERROR: ACTION_MOTION_TIMEOUT
 ```
 
-`StartMCBMotion()` (in `StratoRatchuts.cpp`) is the shared helper that maps
+`StartMCBMotion()` (in `StratoRachuts.cpp`) is the shared helper that maps
 `mcb_motion` (`MOTION_REEL_IN/OUT/DOCK/IN_NO_LW`) to the matching `mcbComm.TX_*`
 call, computes `max_profile_seconds` (the motion timeout budget) from the
-configured velocity + `motion_timeout`, and sends a `RATCHUTSTEXT` FINE TM
+configured velocity + `motion_timeout`, and sends a `RACHUTSTEXT` FINE TM
 describing the motion. `mcb_motion_ongoing` is set/cleared asynchronously by the
 MCB ack/complete handlers in `MCBRouter.cpp`, not by these state machines
 directly.
@@ -258,7 +258,7 @@ stateDiagram-v2
 ```
 
 - Success sets `check_pu_success = true` (checked by the `FLM_CHECK_PU` caller
-  to decide whether to `force_ratchutsreport`).
+  to decide whether to `force_rachutsreport`).
 - Failure only sends a `WARN` TM ("PU not responding to status request") and
   returns — it does **not** escalate to `MODE_ERROR` here. This sub-machine
   treats a non-responding RPU as a communication timeout, not a fault report;
@@ -317,7 +317,7 @@ stateDiagram-v2
     ST_MONITOR_MOTION --> ST_IDLE: !mcb_motion_ongoing (loops back for next scheduled step)
     ST_MONITOR_MOTION --> [*]: ACTION_MOTION_STOP
     ST_CHECK_PU --> ST_WAIT_PU: TX RPU_SEND_STATUS
-    ST_WAIT_PU --> [*]: pu_docked (force_ratchutsreport=true, MCB_ZERO_REEL)
+    ST_WAIT_PU --> [*]: pu_docked (force_rachutsreport=true, MCB_ZERO_REEL)
     ST_WAIT_PU --> ST_CHECK_PU: RESEND_PU_CHECK (1st time)
     ST_WAIT_PU --> [*]: RESEND_PU_CHECK (2nd time, WARN)
 ```
@@ -434,7 +434,7 @@ stateDiagram-v2
   (`Flight_CheckPU(false)` return alone advances state, regardless of
   `check_pu_success`); it appears to exist mainly to prime dock-state tracking
   before the pull begins.
-- Each batch is offloaded as one `RATCHUTSREPORT`-adjacent binary `RPUREPORT` TM
+- Each batch is offloaded as one `RACHUTSREPORT`-adjacent binary `RPUREPORT` TM
   (`SendRPUREPORT(packet_num)`), capped at `RPU_TM_MAX_RECORDS` (120) records per
   block — see `KnownIssues.md` Appendix A.
 - `ST_TM_ACK` never fails out — after one resend attempt it proceeds back to
@@ -496,14 +496,14 @@ Each sub-state-machine's *internal* `ST_*` states are private (`static`) to
 their own `.cpp` file and are not visible in `SENDSTATE` (TC 203) — only the
 outer `FLM_*` value is reported. Ground has no direct visibility into, e.g.,
 whether `Flight_Profile` is currently dwelling vs. redocking; that must be
-inferred from the TM stream (`RATCHUTSREPORT`/`MCBREPORT`/`RATCHUTSTEXT`
+inferred from the TM stream (`RACHUTSREPORT`/`MCBREPORT`/`RACHUTSTEXT`
 messages).
 
 ---
 
 ## Appendix: `ACTION_*` vs. `COMMAND_*` naming
 
-`ScheduleAction_t` (`StratoRatchuts.h`) mixes two naming conventions:
+`ScheduleAction_t` (`StratoRachuts.h`) mixes two naming conventions:
 
 ```cpp
 // internal actions

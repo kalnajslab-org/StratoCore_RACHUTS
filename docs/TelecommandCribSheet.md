@@ -69,7 +69,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 143 | GETPUSTATUS | Request RPU status over dock (**flight only**) → RATCHUTSREPORT TM | — |
+| 143 | GETPUSTATUS | Request RPU status over dock (**flight only**) → RACHUTSREPORT TM | — |
 | 144 | PUPOWERON | Enable RPU dock power | — |
 | 145 | PUPOWEROFF | Disable RPU dock power | — |
 | 180 | RPUCONFIG | Configure RPU measurement (stored) | duration (s), rate (s), ROPC, TDLAS, TSEN, RS41 |
@@ -110,7 +110,7 @@ Notes:
 ## Common sequences
 
 - **Get RPU status (flight mode):**
-  - `143` GETPUSTATUS *(no params)* → RATCHUTSREPORT TM.
+  - `143` GETPUSTATUS *(no params)* → RACHUTSREPORT TM.
 - **Bench RPU measure + offload:**
   - `181` RPUSTATUSPERIOD(period s) — set how often the RPU reports status
   - `180` RPUCONFIG(duration s, rate s, ROPC 0/1, TDLAS 0/1, TSEN 0/1, RS41 0/1)

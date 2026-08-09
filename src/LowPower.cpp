@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS low power mode.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 enum LPStates_t : uint8_t {
     LP_ENTRY = MODE_ENTRY,
@@ -21,15 +21,15 @@ enum LPStates_t : uint8_t {
     LP_EXIT = MODE_EXIT
 };
 
-void StratoRatchuts::LowPowerMode()
+void StratoRachuts::LowPowerMode()
 {
     mode_code = "LP";
-    SendPeriodicRATCHUTSREPORT();
+    SendPeriodicRACHUTSREPORT();
     switch (inst_substate) {
     case LP_ENTRY:
         // perform setup
         log_nominal("Entering LP");
-        force_ratchutsreport = true; // report status promptly on mode entry
+        force_rachutsreport = true; // report status promptly on mode entry
         inst_substate = LP_ALERT_MCB;
         break;
     case LP_ALERT_MCB:

@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS standby mode.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 enum SBStates_t : uint8_t {
     SB_ENTRY = MODE_ENTRY,
@@ -19,14 +19,14 @@ enum SBStates_t : uint8_t {
     SB_EXIT = MODE_EXIT
 };
 
-void StratoRatchuts::StandbyMode()
+void StratoRachuts::StandbyMode()
 {
     mode_code = "SB";
-    SendPeriodicRATCHUTSREPORT();
+    SendPeriodicRACHUTSREPORT();
     switch (inst_substate) {
     case SB_ENTRY:
         log_nominal("Entering SB");
-        force_ratchutsreport = true; // report status promptly on mode entry
+        force_rachutsreport = true; // report status promptly on mode entry
 
         // send mode request in first loop
         scheduler.AddAction(SEND_IMR, 0);

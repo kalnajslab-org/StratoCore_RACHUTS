@@ -6,12 +6,12 @@
  *  This file implements the RACHuTS Telecommand handler.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 // Guard for flight-only TCs. mode_code is set at the top of each mode function,
 // so it reflects the current StratoCore mode when a TC is handled. On failure it
 // populates the TC-ack detail (msg3) and flag rather than logging directly.
-bool StratoRatchuts::RequireFlightMode(const char * cmd, String & msg3, StateFlag_t & flag)
+bool StratoRachuts::RequireFlightMode(const char * cmd, String & msg3, StateFlag_t & flag)
 {
     if (0 != strcmp(mode_code, "FL")) {
         msg3 = String(cmd) + " ignored: not in flight mode";
@@ -22,9 +22,9 @@ bool StratoRatchuts::RequireFlightMode(const char * cmd, String & msg3, StateFla
 }
 
 // The telecommand handler must return ACK/NAK
-bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
+bool StratoRachuts::TCHandler(Telecommand_t telecommand)
 {
-    // TC acknowledgement summary (sent as a RATCHUTSTCACK TM after the switch):
+    // TC acknowledgement summary (sent as a RACHUTSTCACK TM after the switch):
     // msg2 = command summary, msg3 = detail/error, msg1_flag = FINE/WARN/CRIT.
     String msg2("");
     String msg3("");
@@ -229,9 +229,9 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
         msg2 = "Set motion_timeout: " + String(pibConfigs.motion_timeout.Read());
         break;
     case GETPIBEEPROM:
-        msg2 = "TC Get RATCHuTS EEPROM";
+        msg2 = "TC Get RACHuTS EEPROM";
         if (mcb_motion_ongoing) {
-            msg3 = "Motion ongoing, request RATCHuTS EEPROM later";
+            msg3 = "Motion ongoing, request RACHuTS EEPROM later";
             msg1_flag = WARN;
         } else {
             send_pib_eeprom = true;
@@ -334,7 +334,7 @@ bool StratoRatchuts::TCHandler(Telecommand_t telecommand)
 
     // Send a TC acknowledgement TM
     zephyrTX.clearTm();
-    zephyrTX.setStateDetails(1, "RATCHUTSTCACK");
+    zephyrTX.setStateDetails(1, "RACHUTSTCACK");
     zephyrTX.setStateFlagValue(1, msg1_flag);
 
     zephyrTX.setStateDetails(2, msg2);

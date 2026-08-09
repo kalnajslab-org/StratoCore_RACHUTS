@@ -1,4 +1,4 @@
-# StratoCore_RATCHUTS
+# StratoCore_RACHUTS
 
 This repository contains the code to run the Profiler Interface Board (PIB) on the Reeldown Aerosol, Clouds, Humidity, and Temperature Sensor (RACHuTS) flown by [LASP](https://lasp.colorado.edu/home/) on the CNES [Stratéole 2](https://strat2.org/) super-pressure balloon campaign. StratoPIB inherits functionality from [StratoCore](https://github.com/kalnajslab-org/StratoCore). To understand StratoPIB, first read the documentation for StratoCore.
 
@@ -13,7 +13,7 @@ This repository contains the code to run the Profiler Interface Board (PIB) on t
 
 All of the instruments use [Teensy 4.1](https://www.pjrc.com/teensy/) Arduino-compatible MCU boards as the primary computer. This project has migrated from the Arduino IDE to [PlatformIO](https://platformio.org/): the code uses the Arduino framework/drivers for the Teensy 4.1, but is built via PlatformIO's `teensy41` board definition rather than the Arduino IDE + [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html) plug-in (see `platformio.ini`).
 
-The main sketch file is `StratoCore_RATCHUTS.ino` at the repository root. To build, use the PlatformIO `rachuts` environment, e.g. `pio run -e rachuts`.
+The main sketch file is `StratoCore_RACHUTS.ino` at the repository root. To build, use the PlatformIO `rachuts` environment, e.g. `pio run -e rachuts`.
 
 ## RACHuTS Overview
 
@@ -29,7 +29,7 @@ Testing is now performed with the [ZephyrSim](https://github.com/kalnajslab-org/
 > no longer expects a single `&Serial` pointer passed for both
 > `zephyr_serial` and `debug_serial`. **Both a dedicated Zephyr serial
 > connection and a Teensy USB `Serial` connection are required.**
-> `StratoRatchuts` is constructed with `ZEPHYR_SERIAL` (`Serial1`) for the
+> `StratoRachuts` is constructed with `ZEPHYR_SERIAL` (`Serial1`) for the
 > Zephyr link and `DEBUG_SERIAL` (`Serial`, the Teensy USB port) for debug
 > output (see `PIBHardware.h`).
 

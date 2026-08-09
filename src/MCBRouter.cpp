@@ -6,10 +6,10 @@
  *  This file implements the RACHuTS Motor Control Board message router and handlers.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 #include "Serialize.h"
 
-void StratoRatchuts::RunMCBRouter()
+void StratoRachuts::RunMCBRouter()
 {
     SerialMessage_t rx_msg = mcbComm.RX();
 
@@ -30,7 +30,7 @@ void StratoRatchuts::RunMCBRouter()
     }
 }
 
-void StratoRatchuts::HandleMCBASCII()
+void StratoRachuts::HandleMCBASCII()
 {
     switch (mcbComm.ascii_rx.msg_id) {
     case MCB_MOTION_FINISHED:
@@ -78,7 +78,7 @@ void StratoRatchuts::HandleMCBASCII()
     }
 }
 
-void StratoRatchuts::HandleMCBAck()
+void StratoRachuts::HandleMCBAck()
 {
     switch (mcbComm.ack_id) {
     case MCB_GO_LOW_POWER:
@@ -136,7 +136,7 @@ void StratoRatchuts::HandleMCBAck()
     }
 }
 
-void StratoRatchuts::HandleMCBBin()
+void StratoRachuts::HandleMCBBin()
 {
     // reel_pos is a member (used in SendMCBTM StateMess3); update it here.
     uint16_t reel_pos_index = 21; // todo: don't hard-code this
@@ -159,7 +159,7 @@ void StratoRatchuts::HandleMCBBin()
     }
 }
 
-void StratoRatchuts::HandleMCBString()
+void StratoRachuts::HandleMCBString()
 {
     switch (mcbComm.string_rx.str_id) {
     case MCB_ERROR:

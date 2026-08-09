@@ -1,5 +1,5 @@
 /*
- *  StratoRatchuts.cpp
+ *  StratoRachuts.cpp
  *  Author:  Alex St. Clair
  *  Created: July 2019
  *  Updated for MonDo board: November 2020 (LEK)
@@ -18,9 +18,9 @@ void onReceive(int Size)
     PacketSize = Size;
 }
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
-StratoRatchuts::StratoRatchuts()
+StratoRachuts::StratoRachuts()
     : StratoCore(&ZEPHYR_SERIAL, INSTRUMENT, &DEBUG_SERIAL)
     , mcbComm(&MCB_SERIAL)
     , puComm(&PU_SERIAL)
@@ -32,7 +32,7 @@ StratoRatchuts::StratoRatchuts()
 // --------------------------------------------------------
 
 // note serial setup occurs in main arduino file
-void StratoRatchuts::InstrumentSetup()
+void StratoRachuts::InstrumentSetup()
 {
 
     // safe pin required by Zephyr
@@ -69,13 +69,13 @@ void StratoRatchuts::InstrumentSetup()
     puComm.AssignBinaryRXBuffer(binary_pu, PU_BUFFER_SIZE);
 }
 
-void StratoRatchuts::InstrumentLoop()
+void StratoRachuts::InstrumentLoop()
 {
     WatchFlags();
     LoRaRX();
 }
 
-void StratoRatchuts::LoRaInit()
+void StratoRachuts::LoRaInit()
 {
    if (!LoRa.begin(FREQUENCY)){
        SendTextTM("Starting LoRa failed!", WARN);
@@ -89,7 +89,7 @@ void StratoRatchuts::LoRaInit()
     LoRa.setTxPower(RF_POWER);
 }
 
-void StratoRatchuts::LoRaRX()
+void StratoRachuts::LoRaRX()
 {
     if (PacketSize > 0) {
         PacketSize = 0;
@@ -110,7 +110,7 @@ void StratoRatchuts::LoRaRX()
             }
             Serial.println();
 
-            // Capture only -- the mode loops are the single RATCHUTSREPORT sender and
+            // Capture only -- the mode loops are the single RACHUTSREPORT sender and
             // will incorporate this on their next reporting tick. Sending here
             // (asynchronously, mid-loop) races the mode-loop TM and drops.
             latest_rpu_json = json_str;
@@ -127,19 +127,19 @@ void StratoRatchuts::LoRaRX()
     return;
 }
 
-// Send a RATCHUTSREPORT TM to the ground. The payload is a JSON object with a
-// "ratchuts" header (always present) and, when rpu_block is non-empty, an "rpu"
+// Send a RACHUTSREPORT TM to the ground. The payload is a JSON object with a
+// "rachuts" header (always present) and, when rpu_block is non-empty, an "rpu"
 // block carrying the decoded RPU status:
-//   {"ratchuts":{...}, "rpu":{...}}
+//   {"rachuts":{...}, "rpu":{...}}
 // A header-only report (empty rpu_block) means no RPU status was available.
-void StratoRatchuts::SendRATCHUTSREPORT(const String& rpu_block, const String& source)
+void StratoRachuts::SendRACHUTSREPORT(const String& rpu_block, const String& source)
 {
     zephyrTX.clearTm();
 
     // StateDetails 2 = "<mode>, <source>" (mode_code tracked per mode function)
     snprintf(log_array, LOG_ARRAY_SIZE, "%s, %s", mode_code, source.c_str());
 
-    zephyrTX.setStateDetails(1, "RATCHUTSREPORT");
+    zephyrTX.setStateDetails(1, "RACHUTSREPORT");
     zephyrTX.setStateDetails(2, log_array);
     zephyrTX.setStateDetails(3, (String("Reel: ") + String(reel_pos, 2)).c_str());
     zephyrTX.setStateFlagValue(1, FINE);
@@ -154,7 +154,7 @@ void StratoRatchuts::SendRATCHUTSREPORT(const String& rpu_block, const String& s
     // header epoch). Unset until the RTC is set from GPS time.
     char header[208];
     snprintf(header, sizeof(header),
-             "{\"ratchuts\":{\"epoch\":%lu,\"mode\":\"%s\",\"substate\":%u,\"reel\":%.2f,\"src\":\"%s\",\"rpu_age_s\":%ld}",
+             "{\"rachuts\":{\"epoch\":%lu,\"mode\":\"%s\",\"substate\":%u,\"reel\":%.2f,\"src\":\"%s\",\"rpu_age_s\":%ld}",
              (unsigned long)now(), mode_code, (unsigned)inst_substate, reel_pos, source.c_str(), (long)rpu_age_s);
 
     String payload(header);
@@ -170,36 +170,36 @@ void StratoRatchuts::SendRATCHUTSREPORT(const String& rpu_block, const String& s
     ZephyrTXpoke(ZEPHYRTX_TM);
     zephyrTX.clearTm();
 
-    last_ratchutsreport_ms = millis();
+    last_rachutsreport_ms = millis();
 }
 
-// Every-loop RATCHUTSREPORT driver for SB/FL/SA/LP. The mode loops are the single
+// Every-loop RACHUTSREPORT driver for SB/FL/SA/LP. The mode loops are the single
 // sender: once per rpu_status_rate period -- or immediately when a substate sets
-// force_ratchutsreport (e.g. a TC 143 status request, which must not be held up by
-// time-critical substate work) -- transmit a RATCHUTSREPORT incorporating the most
+// force_rachutsreport (e.g. a TC 143 status request, which must not be held up by
+// time-critical substate work) -- transmit a RACHUTSREPORT incorporating the most
 // recent captured RPU status (LoRa or dock) if one arrived since the last report,
 // otherwise header-only. A rate of 0 disables periodic reporting but not forced.
-void StratoRatchuts::SendPeriodicRATCHUTSREPORT()
+void StratoRachuts::SendPeriodicRACHUTSREPORT()
 {
     uint16_t rate = pibConfigs.rpu_status_rate.Read();
-    bool period_due = (rate != 0) && ((millis() - last_ratchutsreport_ms) >= (uint32_t)rate * 1000UL);
-    if (!force_ratchutsreport && !period_due) return;
-    force_ratchutsreport = false;
+    bool period_due = (rate != 0) && ((millis() - last_rachutsreport_ms) >= (uint32_t)rate * 1000UL);
+    if (!force_rachutsreport && !period_due) return;
+    force_rachutsreport = false;
 
     if (rpu_status_pending) {
-        SendRATCHUTSREPORT(latest_rpu_json, latest_rpu_src); // clears rpu_status_pending
+        SendRACHUTSREPORT(latest_rpu_json, latest_rpu_src); // clears rpu_status_pending
     } else {
-        SendRATCHUTSREPORT("", mode_code);                   // header-only
+        SendRACHUTSREPORT("", mode_code);                   // header-only
     }
 }
 
-// Text TM tagged "RATCHUTSTEXT" with the given StateFlag1. Replaces the base
+// Text TM tagged "RACHUTSTEXT" with the given StateFlag1. Replaces the base
 // ZephyrLog*(), which write the TM directly and so bypass the ZephyrTXpoke()
 // transceiver wake-up.
-void StratoRatchuts::SendTextTM(const char * message, StateFlag_t flag)
+void StratoRachuts::SendTextTM(const char * message, StateFlag_t flag)
 {
     zephyrTX.clearTm();
-    zephyrTX.setStateDetails(1, "RATCHUTSTEXT");
+    zephyrTX.setStateDetails(1, "RACHUTSTEXT");
     zephyrTX.setStateDetails(2, message);
     zephyrTX.setStateDetails(3, (String("Reel: ") + String(reel_pos, 2)).c_str());
     zephyrTX.setStateFlagValue(1, flag);
@@ -213,7 +213,7 @@ void StratoRatchuts::SendTextTM(const char * message, StateFlag_t flag)
 // Wake the MAX3381 transceiver with a throwaway byte (absorbing the dropped
 // first byte after its 30 s inactivity powerdown), then send the requested
 // Zephyr message.
-void StratoRatchuts::ZephyrTXpoke(ZephyrTXMsgType_t msg_type)
+void StratoRachuts::ZephyrTXpoke(ZephyrTXMsgType_t msg_type)
 {
     ZEPHYR_SERIAL.write('\n');
     switch (msg_type) {
@@ -236,7 +236,7 @@ void StratoRatchuts::ZephyrTXpoke(ZephyrTXMsgType_t msg_type)
 // Action handler and action flag helper functions
 // --------------------------------------------------------
 
-void StratoRatchuts::ActionHandler(uint8_t action)
+void StratoRachuts::ActionHandler(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
     if (action >= NUM_ACTIONS) {
@@ -249,7 +249,7 @@ void StratoRatchuts::ActionHandler(uint8_t action)
     action_flags[action].stale_count = 0;
 }
 
-bool StratoRatchuts::CheckAction(uint8_t action)
+bool StratoRachuts::CheckAction(uint8_t action)
 {
     // for safety, ensure index doesn't exceed array size
     if (action >= NUM_ACTIONS) {
@@ -267,13 +267,13 @@ bool StratoRatchuts::CheckAction(uint8_t action)
     }
 }
 
-void StratoRatchuts::SetAction(uint8_t action)
+void StratoRachuts::SetAction(uint8_t action)
 {
     action_flags[action].flag_value = true;
     action_flags[action].stale_count = 0;
 }
 
-void StratoRatchuts::WatchFlags()
+void StratoRachuts::WatchFlags()
 {
     // monitor for and clear stale flags
     for (int i = 0; i < NUM_ACTIONS; i++) {
@@ -291,7 +291,7 @@ void StratoRatchuts::WatchFlags()
 // Profile helpers
 // --------------------------------------------------------
 
-bool StratoRatchuts::StartMCBMotion()
+bool StratoRachuts::StartMCBMotion()
 {
     bool success = false;
 
@@ -328,7 +328,7 @@ bool StratoRatchuts::StartMCBMotion()
     return success;
 }
 
-void StratoRatchuts::AddMCBTM()
+void StratoRachuts::AddMCBTM()
 {
     // make sure it's the correct size
     if (mcbComm.binary_rx.bin_length != MOTION_TM_SIZE) {
@@ -368,7 +368,7 @@ void StratoRatchuts::AddMCBTM()
     }
 }
 
-void StratoRatchuts::NoteProfileStart()
+void StratoRachuts::NoteProfileStart()
 {
     mcb_motion_ongoing = true;
     profile_start = millis();
@@ -391,7 +391,7 @@ void StratoRatchuts::NoteProfileStart()
 
 }
 
-void StratoRatchuts::SendMCBTM(const char * TMname, StateFlag_t state_flag, const char * message)
+void StratoRachuts::SendMCBTM(const char * TMname, StateFlag_t state_flag, const char * message)
 {
     zephyrTX.clearTm();
     zephyrTX.addTm(MCB_TM_buffer, MCB_TM_buffer_idx);
@@ -419,7 +419,7 @@ void StratoRatchuts::SendMCBTM(const char * TMname, StateFlag_t state_flag, cons
 }
 
 
-void StratoRatchuts::SendMCBEEPROM()
+void StratoRachuts::SendMCBEEPROM()
 {
     // the binary buffer has been prepared by the MCBRouter
     zephyrTX.clearTm();
@@ -440,13 +440,13 @@ void StratoRatchuts::SendMCBEEPROM()
     log_nominal("Sent MCB EEPROM as TM");
 }
 
-void StratoRatchuts::SendPIBEEPROM()
+void StratoRachuts::SendPIBEEPROM()
 {
     // create a buffer from the EEPROM (cheat, and use the preallocated MCBComm Binary RX buffer)
     mcbComm.binary_rx.bin_length = pibConfigs.Bufferize(mcbComm.binary_rx.bin_buffer, MAX_MCB_BINARY);
 
     if (0 == mcbComm.binary_rx.bin_length) {
-        log_error("Unable to bufferize RATCHUTS EEPROM");
+        log_error("Unable to bufferize RACHUTS EEPROM");
         return;
     }
 
@@ -455,7 +455,7 @@ void StratoRatchuts::SendPIBEEPROM()
     zephyrTX.addTm(mcbComm.binary_rx.bin_buffer, mcbComm.binary_rx.bin_length);
 
     // use only the first flag to preface the contents
-    zephyrTX.setStateDetails(1, "RATCHUTSEEPROM");
+    zephyrTX.setStateDetails(1, "RACHUTSEEPROM");
     zephyrTX.setStateDetails(2, "");
     zephyrTX.setStateDetails(3, "");
     zephyrTX.setStateFlagValue(1, FINE);
@@ -469,7 +469,7 @@ void StratoRatchuts::SendPIBEEPROM()
     log_nominal("Sent PIB EEPROM as TM");
 }
 
-void StratoRatchuts::SendRPUREPORT(uint8_t packet_num)
+void StratoRachuts::SendRPUREPORT(uint8_t packet_num)
 {
     uint16_t num_records = puComm.binary_rx.bin_length / RPU_RECORD_BYTES;
 
@@ -497,19 +497,19 @@ void StratoRatchuts::SendRPUREPORT(uint8_t packet_num)
     log_nominal(log_array);
 }
 
-void StratoRatchuts::PUDock()
+void StratoRachuts::PUDock()
 {
     pibConfigs.pu_docked.Write(true);
     digitalWrite(PU_PWR_ENABLE, HIGH);
 }
 
-void StratoRatchuts::PUUndock()
+void StratoRachuts::PUUndock()
 {
     pibConfigs.pu_docked.Write(false);
     digitalWrite(PU_PWR_ENABLE, LOW);
 }
 
-void StratoRatchuts::PUStartProfile()
+void StratoRachuts::PUStartProfile()
 {
     // Save the starting lat/lon/alt to include in the profile TMs
     profile_start_latitude = zephyrRX.zephyr_gps.latitude;
@@ -525,7 +525,7 @@ void StratoRatchuts::PUStartProfile()
     pibConfigs.profile_id.Write(pibConfigs.profile_id.Read() + 1);
 }
 
-void StratoRatchuts::ReadAnalog()
+void StratoRachuts::ReadAnalog()
 {
     PU_Ir_mon = analogRead(IMON_PU) * (3.000/4095.0)*5000.0; //12 bit, 3V ref, 0.2 Ohm curent shunt to mA
     PU_Ibts_mon = analogRead(IMON_PU_BTS) * (3.000/4095.0); //just return current proportional voltage from BTS

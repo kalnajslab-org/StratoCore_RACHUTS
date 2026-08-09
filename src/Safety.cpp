@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS safety mode.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 enum SAStates_t : uint8_t {
     SA_ENTRY = MODE_ENTRY,
@@ -29,15 +29,15 @@ enum SAStates_t : uint8_t {
     SA_EXIT = MODE_EXIT
 };
 
-void StratoRatchuts::SafetyMode()
+void StratoRachuts::SafetyMode()
 {
     mode_code = "SA";
-    SendPeriodicRATCHUTSREPORT();
+    SendPeriodicRACHUTSREPORT();
     switch (inst_substate) {
     case SA_ENTRY:
         // perform setup
         log_nominal("Entering SA");
-        force_ratchutsreport = true; // report status promptly on mode entry
+        force_rachutsreport = true; // report status promptly on mode entry
         inst_substate = SA_SEND_FULL_RETRACT;
         break;
 

@@ -6,7 +6,7 @@
  *  This file implements the RACHuTS flight mode.
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 // Flight mode states, FLM = manual, FL = general
 enum FLStates_t : uint8_t {
@@ -40,16 +40,16 @@ enum FLStates_t : uint8_t {
 //  * on each loop, whichever substate is set will be perfomed
 //  * when the mode is changed by the Zephyr, FL_EXIT will automatically be set
 //  * it is up to the FL_EXIT logic perform any actions for leaving flight mode
-void StratoRatchuts::FlightMode()
+void StratoRachuts::FlightMode()
 {
     mode_code = "FL";
-    SendPeriodicRATCHUTSREPORT();
+    SendPeriodicRACHUTSREPORT();
     // todo: draw out flight mode state machine
     switch (inst_substate) {
     case FL_ENTRY:
         // perform setup
         log_nominal("Entering FL");
-        force_ratchutsreport = true; // report status promptly on mode entry
+        force_rachutsreport = true; // report status promptly on mode entry
         inst_substate = FL_GPS_WAIT;
         break;
     case FL_GPS_WAIT:
@@ -102,7 +102,7 @@ void StratoRatchuts::FlightMode()
     }
 }
 
-void StratoRatchuts::ManualFlight()
+void StratoRachuts::ManualFlight()
 {
     switch (inst_substate) {
     case FLM_IDLE:
@@ -151,7 +151,7 @@ void StratoRatchuts::ManualFlight()
             // request a status report if the PU check succeeded (otherwise an error message will have been sent);
             // the mode loop sends it, so time-critical substate work isn't held up
             if (check_pu_success) {
-                force_ratchutsreport = true;
+                force_rachutsreport = true;
             }
             inst_substate = FLM_IDLE;
         }

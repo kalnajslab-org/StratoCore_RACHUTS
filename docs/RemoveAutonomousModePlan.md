@@ -47,13 +47,13 @@ Default is already `autonomous_mode = false` (manual), so removal deletes the
 - **`DEPLOYx`/`RETRACTx`/`DOCKx`**: remove the `if (autonomous_mode)` "switch to
   manual" guard — motion is unconditionally allowed in flight.
 
-### 3. `StratoRatchuts.h`
+### 3. `StratoRachuts.h`
 - Remove members: `autonomous_mode`, `profiles_remaining`, `profiles_scheduled`.
 - Remove decls: `AutonomousFlight()`, `ScheduleProfiles()`.
 - `ScheduleAction_t`: remove `ACTION_BEGIN_PROFILE` (autonomous-only; consumed
   only in `FLA_WAIT_PROFILE`).
 
-### 4. `StratoRatchuts.cpp`
+### 4. `StratoRachuts.cpp`
 - Delete **`ScheduleProfiles()`**.
 - **`StartMCBMotion()`**: `if (autonomous_mode) log_nominal(...) else
   SendTextTM(...)` becomes just `SendTextTM(...)`.

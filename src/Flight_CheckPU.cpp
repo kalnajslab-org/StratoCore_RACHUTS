@@ -4,7 +4,7 @@
  *  Created: October 2019
  */
 
-#include "StratoRatchuts.h"
+#include "StratoRachuts.h"
 
 enum CheckPUStates_t {
     ST_ENTRY,
@@ -15,7 +15,7 @@ enum CheckPUStates_t {
 static CheckPUStates_t checkpu_state = ST_ENTRY;
 static bool resend_attempted = false;
 
-bool StratoRatchuts::Flight_CheckPU(bool restart_state)
+bool StratoRachuts::Flight_CheckPU(bool restart_state)
 {
     if (restart_state) checkpu_state = ST_ENTRY;
 

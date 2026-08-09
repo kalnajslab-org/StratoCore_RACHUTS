@@ -7,13 +7,13 @@
  *  LASP Strateole Zephyr interface boards.
  */
 
-#include "src/StratoRatchuts.h"
+#include "src/StratoRachuts.h"
 #include <TimerOne.h>
 #include "rachuts_version.h"
 
 #define LOOP_TENTHS     10 // defines loop period in 0.1s
 
-StratoRatchuts pib;
+StratoRachuts pib;
 uint8_t Zephyr_serial_TX_buffer[ZEPHYR_SERIAL_BUFFER_SIZE];
 uint8_t Zephyr_serial_RX_buffer[ZEPHYR_SERIAL_BUFFER_SIZE];
 uint8_t mcb_serial_TX_buffer[MCB_SERIAL_BUFFER_SIZE];
