@@ -486,6 +486,91 @@ dock-wait timer, post-dock PU check, MCB-low-power confirm), not just
 
 ---
 
+## 15. `Flight_DockedProfile` could hang forever if a scheduler `AddAction` silently fails — **OPEN (unlikely)**
+
+**Symptom.** None observed; theoretical, found by code inspection.
+
+**Root cause.** `Flight_DockedProfile()`'s only paths to `return true`, besides
+the ground-triggered `ACTION_CANCEL_MEASURE` cancel, are two scheduled timer
+actions: `RESEND_PU_GOPROFILE` (`ST_CONFIRM_GO_MEASURE` — retried once, then
+bails with a WARN if the RPU never ACKs) and `ACTION_END_PREPROFILE`
+(`ST_MEASURE_WAIT`). Both are armed via `scheduler.AddAction(...)`
+(`Flight_DockedProfile.cpp:45,56`), whose `bool` return — `false` when the
+scheduler's 32-slot queue is full, see §3 — is never checked at either call
+site. If `AddAction` silently fails, the corresponding `CheckAction` never
+fires, and the state machine sits in `ST_CONFIRM_GO_MEASURE` or
+`ST_MEASURE_WAIT` indefinitely with no automatic recovery — only a
+ground-issued `CANCELMEASURE` (TC 156) can get it out.
+
+**Likelihood.** Low — requires ~32 other actions already queued at the moment
+the docked profile starts. Same underlying cause as §3 (the scheduler queue is
+unbounded-appending and never dedupes); the proper fix proposed there
+(`AddAction` dedupe) would close this gap too, as would simply checking
+`AddAction`'s return value here and treating a full queue as a bail-out
+condition (e.g. WARN + `return true`).
+
+---
+
+## 16. Zephyr-link CRC check is dead code; a corrupted TC is silently dropped with no NAK (shared lib) — **OPEN**
+
+**Symptom.** A TC sent from the ground can simply vanish — no `RACHUTSTCACK`,
+no `RACHUTSTCACK` WARN, no `TCAck`, nothing at all — while an unrelated TC sent
+moments later works normally. Found while diagnosing a real ground log: TC 181
+(`RPUSTATUSPERIOD`, well-formed) got zero response; TC 180 sent ~4.7 s later got
+a normal (327 ms) WARN response. The instrument's main loop runs a fixed 1 Hz
+cadence (`Timer1.initialize(100000)` × `LOOP_TENTHS=10`,
+`StratoCore_RACHUTS.cpp:14,30,64`) and drains the Zephyr RX queue every tick, so
+a multi-second gap with total silence on one message and a fast, clean response
+on the next rules out any queueing/overwrite explanation — the first message was
+never routed at all.
+
+**Root cause — two compounding gaps in `XMLReader` (`StrateoleXML`,
+`.pio/libdeps/.../StrateoleXML/XMLReader_v5.cpp`), shared by every StratoCore
+instrument's ground uplink parser:**
+
+1. **The CRC check is commented out.** `ReadVerifyCRC()` computes both
+   `read_crc` (from the message) and `crc_result` (the running computed CRC),
+   but the actual comparison is dead: `return true;
+   //((uint16_t) read_crc == crc_result);` (`XMLReader_v5.cpp:427`). So a
+   bit-corrupted message that still happens to match every literal tag/field
+   structure is accepted as if uncorrupted — the CRC field is transmitted and
+   parsed but never actually checked.
+2. **Any framing mismatch is a silent, unlogged drop.** `GetNewMessage()`
+   (`XMLReader_v5.cpp:75-135`) returns `false` with no logging at the first
+   failed stage — `MessageTypeOpen`, field parsing, `MessageTypeClose`,
+   `ReadVerifyCRC`, or (for TCs) `ReadBinarySection()`'s byte-exact match of the
+   literal 5-byte `"START"` sync marker and exact-length read
+   (`XMLReader_v5.cpp:127,437-458`). A single dropped/flipped bit anywhere in
+   that framing fails the match, and `RouteRXMessage()` — which is what sends
+   the low-level `TCAck` — is never called (`StratoCore.cpp:118-128,155-161`).
+   `MessageTypeOpen` resyncs on the next `<` (`XMLReader_v5.cpp:291-296`), so a
+   corrupted message doesn't jam the link, it just disappears without a trace.
+
+The Zephyr uplink shares the same MAX3381ECUP transceiver family already
+implicated in the dock-link bit-error problem (§1, §9), so an isolated
+single-message bit error here is entirely plausible — same physical-layer root
+cause, different link, and here there's no application-level counter (§2 —
+SerialComm's dock/MCB protocols share the "no transport ack/nak" weakness; the
+Zephyr TC path is worse in one respect: it has a CRC field that *looks* like it
+provides integrity checking but doesn't actually check it).
+
+**Practical impact.** From the ground operator's perspective, "TC sent, no
+response at all" is indistinguishable between "instrument never received it"
+and "instrument is unresponsive" — there's no NAK to tell them which. The
+existing `SendPeriodicRACHUTSREPORT`/heartbeat TMs are the only way to confirm
+the instrument is alive; a silently-dropped TC otherwise looks identical to a
+dead instrument until the operator notices the expected `RACHUTSTCACK` never
+arrived and manually resends.
+
+**Deferred (shared-lib change).** Like §2/§3, `XMLReader`/`XMLWriter` are
+shared across all StratoCore instruments, so fixing this (enabling the real CRC
+comparison in `ReadVerifyCRC`, and/or logging a `ZephyrLogWarn` on any
+`GetNewMessage()` parse failure so a corrupted-but-framed-enough message at
+least produces *some* TM) needs validating across instruments and landing in
+the StratoCore source of truth, not just this repo's vendored copy.
+
+---
+
 ## Appendix A — RACHUTS Telemetry (TM) catalog
 
 Every RACHUTS TM is a Zephyr/StrateoleXML telemetry message identified on the
@@ -498,7 +583,7 @@ StateMess2/3 are empty (omitted from the XML).
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
 | `RACHUTSREPORT` | `SendRACHUTSREPORT(rpu_block, source)` — sole caller is `SendPeriodicRACHUTSREPORT()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"rachuts":{"epoch","mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. `epoch` is the PIB system time (Unix seconds via `now()`, like RATSREPORT's header epoch; unset until the RTC is set from GPS). The `rachuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
-| `RPUREPORT` | `SendRPUREPORT(packet_num)` (payload added in `HandlePUBin`, PURouter) | `Number of RPURecords: <n>` | `PU TM: <profile_id>.<packet_num>, <pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 38 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
+| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented on go-measure send — not part of the RPU record itself) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |
