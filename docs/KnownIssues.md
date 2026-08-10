@@ -3,70 +3,165 @@
 A running record of bugs, design weaknesses, and hardware quirks in the
 RACHUTS PIB firmware and the RPU (Profiler Unit) firmware, with root causes and
 status. Spans two repos: `StratoCore_RACHUTS` (PIB, the dock master) and `RPU`
-(the profiler, the dock slave). Last updated 2026-06-13.
+(the profiler, the dock slave). Last updated 2026-08-10.
 
 Status legend: **FIXED** · **MITIGATED** (worked around, root cause remains) ·
 **OPEN** (identified, not yet addressed).
 
 ---
 
-## 1. Dock-link record-offload corruption (RACHUTS ↔ RPU) — **MITIGATED**
+## 1. Dock-link record-offload "corruption" (RACHUTS ↔ RPU) — **RESOLVED**
 
 **Symptom.** During a profile offload, `RPU_PROFILE_RECORD` blocks intermittently
 fail their checksum on the RACHUTS side (`"Profile record checksum invalid
-(len=...)"`). Failures are **probabilistic (~45% per 5700-byte block) and scale
-with frame size**, not deterministic by position. The framing stays intact
-(exact byte count, terminator found, checksum digits parse) — only payload
-*values* are wrong, i.e. genuine bit errors during reception.
+(len=...)"`). Failures are **probabilistic and scale with frame size**, not
+deterministic by position. The framing stays intact (exact byte count,
+terminator found, checksum digits parse).
 
-**Root cause.** Physical-layer signal integrity on the RS-232 dock link, error
-rate ~1×10⁻⁴/byte. The link is RS-232 through a **MAX3381ECUP** charge-pump
-transceiver on each end; the rails sag under a sustained gap-free burst, flipping
-bits. The earlier "first block works, later blocks fail" and "fails above N
-records" impressions were small-sample artifacts of this probability curve.
+**Root cause (found 2026-08-10): a `SerialComm::ReadChecksum()` race on the
+closing semicolon — not link corruption.** Direct evidence: captured the exact
+bytes handed to `TX_Bin()` on the RPU (`debug.tx`) and the exact bytes
+`Read_Bin()` put in `binary_rx.bin_buffer` on RACHUTS (`debug.rx`) for a block
+RACHUTS flagged `checksum invalid (len=7212)`. `cmp -l` found **zero byte
+differences** — the payload RACHUTS received was byte-for-byte identical to
+what the RPU sent. That falsifies "genuine bit errors during reception" as the
+cause, at least for this (and very likely most) failures, and points squarely
+at the checksum-comparison code itself. (Also ruled out: version skew between
+the two repos' vendored `SerialComm`/`RPUComm` copies — diffed byte-identical.)
 
-**Contributing factors found along the way:**
+The actual bug: `ReadChecksum()`'s digit-reading loop
+(`while (timeout > millis() && temp < 5)`) can exit at its 5-digit cap
+*without ever having waited* for the checksum's closing `;` — every other
+delimiter check in this file (`ReadSpecificChar`) busy-waits, bounded by
+`timeout`, before reading its byte, but this one falls through to a single
+**non-blocking** `if (';' != serial_stream->read()) return false;`. If that
+byte hasn't physically landed in the UART buffer yet (plausible within a few
+µs at the tail of a transmission), the read returns `-1`, and an otherwise
+perfectly-received message is spuriously flagged checksum-invalid.
+
+**Why this explains the frame-size correlation** (previously read as "longer
+bursts → worse signal integrity"): the bug only fires when the *combined*
+16-bit checksum (`(check_a << 8) | check_b`) needs all 5 decimal digits, which
+happens whenever `check_a` (the upper byte) is roughly ≥ 40 — about **84% of
+`check_a`'s possible range**. Whether `check_a` (a running `mod 256` sum of
+every byte in the message) lands there depends on how much it's wrapped
+around:
+- **Short, low-byte messages** (ACKs, status requests — a handful of ASCII
+  digits/delimiters) often have a raw byte sum that never even reaches 256, so
+  `check_a` sits at that small literal sum, frequently well under the 5-digit
+  threshold — the race rarely gets a chance to fire.
+- **Long binary payloads** (profile-record blocks, thousands of bytes of
+  varied sensor data) wrap `check_a` around 256 thousands of times over the
+  message, effectively randomizing it across its full 0–255 range — so on any
+  given transmission there's roughly an **84–86% chance** it lands in the
+  5-digit zone.
+
+So it isn't that long messages have more corruption opportunity — it's that
+long, byte-varied messages are simply far more likely to *land on* the exact
+checksum-digit-count that exposes the race, while short messages usually don't.
+**This also means the same latent bug is present on every other checksummed
+exchange in the system** (MCB link, Zephyr-adjacent ASCII/ACK traffic
+wherever `SerialComm` is used) — it's just statistically much rarer to trigger
+on short messages, which may explain some of the very infrequent, previously
+unexplained aberrant behavior seen elsewhere and chalked up to noise.
+
+**Fix applied** (2026-08-10, both repos' vendored
+`.pio/libdeps/.../SerialComm/SerialComm.cpp`, not yet in application code):
+added a bounded wait (`while (timeout > millis() &&
+!serial_stream->available());`) before the closing-`;` read, matching how
+every other delimiter in the file is read. Deliberately *not* implemented via
+`ReadSpecificChar`/`GetNextChar`, since those update the running checksum
+accumulator — this trailing `;` must stay outside the checksum (mirrors
+`WriteChecksum()`'s own trailing `WriteChar(';')` on the TX side, written
+*after* `combined_checksum` is already captured). **Confirmed via simulator
+testing (2026-08-10)** — checksum failures resolved. Not yet confirmed on
+real flight hardware. **Upstreamed into the `SerialComm` GitHub source**
+(no longer just a local vendored patch — a fresh `pio` lib fetch on either
+repo should now pull the fix directly).
+
+**Superseded theory (kept for history).** The original diagnosis blamed
+physical-layer signal integrity on the RS-232 dock link — a **MAX3381ECUP**
+charge-pump transceiver whose rails were thought to sag under a sustained
+gap-free burst. **This is now believed wrong**: the dock link was since
+switched from RS-232 to TTL (bypassing the MAX3381 transceiver entirely, as
+the previous-generation PU used) and the failures persisted identically,
+which is inconsistent with a transceiver-specific electrical cause and was
+the observation that reopened this investigation. UART hardware RX error
+flags (overrun/noise/framing/parity) were also directly instrumented on the
+Teensy 4.1 LPUART peripheral and read **clean** across observed failures,
+ruling out UART-peripheral-level corruption too. The contributing factors and
+mitigations found under the old theory are kept below since they were real,
+independently-useful fixes (or at least harmless), but their justification
+("worst case for a marginal charge pump") should be considered superseded.
+
+**Contributing factors found along the way (still valid fixes, regardless of
+root-cause theory):**
 - The RACHUTS `PU_SERIAL` RX ring buffer was **4096 bytes**, smaller than an
   8 KB record frame, so frames overflowed and were dropped before `Read_Bin`
   drained them. Fixed: `PU_SERIAL_BUFFER_SIZE` → **16384** (StratoRachuts.h).
 - The RPU added an 8 KB `DOCK_SERIAL` TX buffer so `TX_Bin()` dumps a whole
-  frame and the UART sends it **gap-free** for ~600 ms. This *unmasked* the SI
-  problem (a saturated burst is the worst case for a marginal charge pump);
-  the legacy PU's small TX buffer paced the output and never exposed it.
+  frame and the UART sends it gap-free for ~600 ms, instead of the legacy PU's
+  paced small-TX-buffer output.
 
-**Ruled out (with evidence):**
+**Ruled out along the way (with evidence):**
 - *Not* a software state bug — failures are random, not "second block."
 - *Not* concurrent on-board activity — disabling the RPU TX buffer (forcing the
   loop to block through the burst, like the legacy PU) did **not** help.
 - *Not* RAM2/DMAMEM corruption of the record buffer — moving `rpu_records` out
-  of DMAMEM did **not** help (and a bad RAM read would checksum-consistently,
-  yielding valid-checksum-wrong-data, not a mismatch).
+  of DMAMEM did **not** help.
 - *Not* the Zephyr TM transmit between blocks — legacy multi-block offloads with
   a TM per block worked fine.
 - *Not* a transceiver sleep/first-byte drop — a `\n` wake byte before
-  `RPU_SEND_RECORDS` did **not** help (this is mid-burst corruption, not a
-  first-byte-after-idle drop).
+  `RPU_SEND_RECORDS` did **not** help.
+- *Not* RS-232 signal integrity — TTL swap did **not** help (see above).
+- *Not* UART peripheral-level overrun/noise/framing/parity errors — instrumented
+  directly, read clean across observed failures (see above).
+- *Not* version skew between the two repos' vendored `SerialComm`/`RPUComm`
+  copies — diffed byte-identical.
+- *Not* a length limitation in the checksum algorithm itself — `check_a`/
+  `check_b` are `uint8_t` accumulators with intentional `mod 256` wraparound,
+  mathematically length-agnostic; verified no buffer/loop-bound overflow at
+  the sizes in use.
 
-**Mitigations in place.**
-- RPU batch capped at **120 records** (~4560 bytes, `RPU_TM_MAX_RECORDS`) — lower
-  per-frame failure probability than 150/200 (200 failed almost always). The
-  ~45% figure above was measured at the earlier 150-record/5700-byte cap.
-- Per-block NAK retransmit on the RPU + RACHUTS `RESEND_PU_RECORD` timeout.
+**Mitigations still in place (may be safe to relax once the fix above is
+validated — kept for now as belt-and-suspenders):**
+- RPU batch capped at **160 records** (`RPU_TM_MAX_RECORDS`, 7692 B/block —
+  `RPU_BLOCK_HDR_BYTES(12) + 160 × RPU_RECORD_BYTES(48)`), leaving 500 bytes of
+  margin against RACHUTS's `PU_BUFFER_SIZE` (8192, `StratoRachuts.h`). A
+  `static_assert` was added in RPU.cpp (`RPU_TM_BUFFER_BYTES < 8092`, i.e. a
+  required 100-byte headroom below 8192) so a future `RPURecord` growth that
+  busts this margin now fails the RPU build instead of silently getting
+  rejected at runtime on the RACHUTS side. Note this check is a hardcoded
+  duplicate of RACHUTS's `PU_BUFFER_SIZE` value, not a shared constant — if
+  `PU_BUFFER_SIZE` itself is ever changed on the RACHUTS side, this assert
+  won't automatically track it and would need a matching update.
+- RACHUTS now **accepts and forwards** a checksum-invalid `RPU_PROFILE_RECORD`
+  to the ground rather than NAK/retrying (`PURouter.cpp::HandlePUBin`) — added
+  2026-08-09, before the race was found, as a defensive measure against
+  repeated-failure aborts. Worth reconsidering once the real fix is validated:
+  if checksum failures become rare/nonexistent, reverting to NAK+retry (with
+  the original all-or-nothing abort-after-two-failures behavior fixed
+  separately) may be preferable to shipping known-corrupted data.
 
 **Still open / to try.**
-- The link is genuinely marginal; retransmits recover single failures but the
-  offload still aborts when two land back-to-back. The real fix is hardware:
-  **inspect the MAX3381 charge-pump capacitors** (see §9) and/or **lower the
-  dock baud** (115200 → 57600) to buy timing margin — note the `Read_Bin`
-  timeout is 1000 ms, so watch the block transfer time if you drop baud or raise
-  the batch size (the current ~4560-byte block is ~790 ms at 57600; a larger
-  block or lower baud would brush the limit).
+- Confirm on real flight hardware (validated via simulator so far).
+- Also audit `Read_ASCII()`'s message-ID delimiter check (`SerialComm.cpp`,
+  the `rx_char = serial_stream->peek(); if (rx_char != ',' && rx_char != ';')
+  return false;` right after the id-digit loop) — same class of bug (a
+  non-waiting check right after a loop that can exit at its own digit cap).
+  Every equivalent check in `Read_Ack`/`Read_Bin`/`Read_String` already uses
+  the safe, waiting `ReadSpecificChar` pattern; `Read_ASCII` is the one
+  outlier. Not yet fixed.
+- Once validated, reconsider whether the 160-record cap and
+  accept-instead-of-retry mitigation are still necessary.
 
 **Legacy comparison.** The legacy PU (`PUCode/RACHuTS_PU_V2_5.ino`) sent up to
 200×30 B = 6000 B profile batches and 750×10 B = 7500 B TSEN batches reliably —
-on *different PU hardware* (different transceiver/charge pump) and with a paced
-(small-TX-buffer) output. So "it worked before" does not transfer to the new RPU
-board.
+on *different PU hardware* and with a paced (small-TX-buffer) output. Given the
+new root-cause theory, this is no longer necessarily evidence of a hardware
+difference — a paced, small-buffer output would also change the checksum
+value's digit-count distribution and message timing in ways that could have
+simply made the legacy code less likely to hit this same race.
 
 ---
 
@@ -583,7 +678,7 @@ StateMess2/3 are empty (omitted from the XML).
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
 | `RACHUTSREPORT` | `SendRACHUTSREPORT(rpu_block, source)` — sole caller is `SendPeriodicRACHUTSREPORT()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"rachuts":{"epoch","mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. `epoch` is the PIB system time (Unix seconds via `now()`, like RATSREPORT's header epoch; unset until the RTC is set from GPS). The `rachuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
-| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented on go-measure send — not part of the RPU record itself) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 120 records (`RPU_TM_MAX_RECORDS`) ≈ 4560 B/block. |
+| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented on go-measure send — not part of the RPU record itself) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 7692 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |
