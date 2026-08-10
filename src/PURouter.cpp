@@ -78,12 +78,18 @@ void StratoRachuts::HandlePUBin()
     switch (puComm.binary_rx.bin_id) {
     case RPU_PROFILE_RECORD:
         if (!puComm.binary_rx.checksum_valid) {
-            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record checksum invalid (len=%u)",
+            // Send it anyway rather than NAK/retry: a checksum failure here is
+            // usually a few corrupted bytes, not total garbage, and retries often
+            // fail too (dock-link corruption, KnownIssues.md #1), previously
+            // aborting the whole offload after two failures in a row. ACKing (below)
+            // is required even though the checksum is bad -- a NAK would leave this
+            // batch un-popped on the RPU, which would just resend the same bytes
+            // forever while RACHUTS moves on to "new" (but identical) requests.
+            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record checksum invalid (len=%u), sending to ground anyway",
                      puComm.binary_rx.bin_length);
             log_error(log_array);
-            puComm.TX_Ack(RPU_PROFILE_RECORD, false);
-            zephyrTX.clearTm();
-        } else if (!zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
+        }
+        if (!zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
             snprintf(log_array, LOG_ARRAY_SIZE, "Profile record too large for TM buffer (len=%u, tm_used=%u)",
                      puComm.binary_rx.bin_length, zephyrTX.getTmLen());
             log_error(log_array);
