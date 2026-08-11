@@ -112,12 +112,16 @@ void StratoRachuts::LoRaRX()
 
             // Capture only -- the mode loops are the single RACHUTSREPORT sender and
             // will incorporate this on their next reporting tick. Sending here
-            // (asynchronously, mid-loop) races the mode-loop TM and drops.
+            // (asynchronously, mid-loop) races the mode-loop TM and drops. Setting
+            // force_rachutsreport makes that next tick happen on the following
+            // loop iteration rather than waiting out the periodic interval, so
+            // every LoRa status report is reported immediately.
             latest_rpu_json = json_str;
             latest_rpu_src = "LORA";
             last_rpu_recv_ms = millis();
             rpu_ever_received = true;
             rpu_status_pending = true;
+            force_rachutsreport = true;
         }
         else
         {
@@ -175,10 +179,11 @@ void StratoRachuts::SendRACHUTSREPORT(const String& rpu_block, const String& sou
 
 // Every-loop RACHUTSREPORT driver for SB/FL/SA/LP. The mode loops are the single
 // sender: once per rpu_status_rate period -- or immediately when a substate sets
-// force_rachutsreport (e.g. a TC 143 status request, which must not be held up by
-// time-critical substate work) -- transmit a RACHUTSREPORT incorporating the most
-// recent captured RPU status (LoRa or dock) if one arrived since the last report,
-// otherwise header-only. A rate of 0 disables periodic reporting but not forced.
+// force_rachutsreport (e.g. a TC 143 status request, or a freshly received LoRa
+// status report, either of which must not be held up by time-critical substate
+// work) -- transmit a RACHUTSREPORT incorporating the most recent captured RPU
+// status (LoRa or dock) if one arrived since the last report, otherwise
+// header-only. A rate of 0 disables periodic reporting but not forced.
 void StratoRachuts::SendPeriodicRACHUTSREPORT()
 {
     uint16_t rate = pibConfigs.rpu_status_rate.Read();
@@ -472,8 +477,8 @@ void StratoRachuts::SendRPUREPORT(uint8_t packet_num)
 
     zephyrTX.setStateDetails(1, "RPUREPORT");
 
-    snprintf(log_array, LOG_ARRAY_SIZE, "profile:%u packet:%u records: %u", 
-        pibConfigs.profile_id.Read(), packet_num, num_records);
+    snprintf(log_array, LOG_ARRAY_SIZE, "profile:%u segment:%u packet:%u records: %u",
+        pibConfigs.profile_id.Read(), docked_segment, packet_num, num_records);
     zephyrTX.setStateDetails(2, log_array);
 
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "%lu, %0.4f, %0.4f, %0.1f", 
