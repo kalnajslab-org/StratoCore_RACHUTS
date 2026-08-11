@@ -137,6 +137,7 @@ void StratoRachuts::ManualFlight()
             inst_substate = FLM_PROFILE;
         } else if (CheckAction(ACTION_OFFLOAD_PU)) {
             log_nominal("Offload PU Manual");
+            docked_segment = 0; // not a docked-profile offload
             Flight_PUOffload(true);
             inst_substate = FLM_PU_OFFLOAD;
         } else if (CheckAction(COMMAND_DOCKED_PROFILE)) {

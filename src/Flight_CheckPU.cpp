@@ -30,7 +30,7 @@ bool StratoRachuts::Flight_CheckPU(bool restart_state)
 
     case ST_SEND_REQUEST:
         puComm.TX_ASCII(RPU_SEND_STATUS);
-        scheduler.AddAction(RESEND_PU_CHECK, PU_RESEND_TIMEOUT);
+        scheduler.AddAction(RESEND_PU_CHECK, RPU_RECEIVE_TIMEOUT);
         if (resend_attempted) {
             log_nominal("CheckPU: resent RPU_SEND_STATUS request");
         } else {

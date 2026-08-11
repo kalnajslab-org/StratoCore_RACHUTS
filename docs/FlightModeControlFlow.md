@@ -411,9 +411,11 @@ Key details not obvious from the diagram:
 ## `Flight_PUOffload` (`FLM_PU_OFFLOAD`) — pull stored profile records (TC 147)
 
 Triggered directly by TC 147 via `FLM_IDLE` (mechanism 1), and by
-`Flight_DockedProfile` calling `SetAction(ACTION_OFFLOAD_PU)` when
-`pu_auto_offload` is enabled — the same flag TC 147 sets, so `FLM_IDLE` picks it
-up normally (mechanism 2), not a direct nested call.
+`Flight_DockedProfile`, which calls it as a **direct nested function call**
+(mechanism 3, like its own call to `Flight_CheckPU`) at every measure-segment
+boundary and at the end of the profile — `inst_substate` stays `FLM_DOCKED`
+throughout, it never becomes `FLM_PU_OFFLOAD` in that case. See the
+`Flight_DockedProfile` section below.
 
 ```mermaid
 stateDiagram-v2
@@ -435,8 +437,11 @@ stateDiagram-v2
   `check_pu_success`); it appears to exist mainly to prime dock-state tracking
   before the pull begins.
 - Each batch is offloaded as one `RACHUTSREPORT`-adjacent binary `RPUREPORT` TM
-  (`SendRPUREPORT(packet_num)`), capped at `RPU_TM_MAX_RECORDS` (120) records per
-  block — see `KnownIssues.md` Appendix A.
+  (`SendRPUREPORT(packet_num)`), capped at the RPU's `RPU_TM_MAX_RECORDS` (160)
+  records per block — see `KnownIssues.md` Appendix A. When called from a
+  docked profile, `docked_segment` (incremented once per offload, 0 for a
+  standalone TC 147 offload) is included alongside `packet_num` so
+  `(profile_id, segment, packet)` stays unique across a multi-segment profile.
 - `ST_TM_ACK` never fails out — after one resend attempt it proceeds back to
   `ST_REQUEST_PACKET` regardless of ack outcome, unlike `Flight_ManualMotion`'s
   equivalent step which exits either way (same *shape*, different consequence:
@@ -448,28 +453,76 @@ stateDiagram-v2
 ## `Flight_DockedProfile` (`FLM_DOCKED`) — measure without moving the reel (TC 153)
 
 Triggered by TC 153 (`DOCKEDPROFILE`) via `FLM_IDLE` (mechanism 1); no other
-sub-machine invokes it. The simplest sub-machine — no RA, no MCB motion at all,
-since the PU stays docked.
+sub-machine invokes it. No RA, no MCB motion at all, since the PU stays docked.
+`docked_profile_time` is the **total measurement time**: if
+`pibConfigs.docked_offload_period` (TC 157, EEPROM) is nonzero and shorter than
+the profile duration, measurement is split into segments no longer than the
+period, with an RPU standby + `Flight_PUOffload` pause between them so data
+comes down periodically instead of only at the end. Wall-clock runtime is
+longer than `docked_profile_time` by however long those pauses take.
+`docked_profile_time == 0` means measure indefinitely, offloading every
+period, until TC 156 (`CANCELMEASURE`).
 
 ```mermaid
 stateDiagram-v2
     [*] --> ST_ENTRY
-    ST_ENTRY --> ST_CONFIRM_GO_MEASURE: TX go-measure (from stored rpu_meas_* config)
-    ST_CONFIRM_GO_MEASURE --> ST_MEASURE_WAIT: pu_measure (increment profile_id, schedule ACTION_END_PREPROFILE@docked_profile_time)
-    ST_CONFIRM_GO_MEASURE --> ST_GO_MEASURE: RESEND_PU_GOPROFILE (1st time)
-    ST_GO_MEASURE --> ST_CONFIRM_GO_MEASURE
-    ST_CONFIRM_GO_MEASURE --> [*]: RESEND_PU_GOPROFILE (2nd time, WARN)
-    ST_MEASURE_WAIT --> [*]: ACTION_END_PREPROFILE (FINE "Finished docked profile"; optionally SetAction(ACTION_OFFLOAD_PU))
+    ST_ENTRY --> ST_GO_MEASURE: increment profile_id, capture GPS position
+    ST_GO_MEASURE --> ST_CONFIRM_GO_MEASURE: TX go-measure(segment_len, docked_profile_rate, ...)
+    ST_CONFIRM_GO_MEASURE --> ST_GO_MEASURE: reply timeout (1st time)
+    ST_CONFIRM_GO_MEASURE --> [*]: reply timeout (2nd time, WARN)
+    ST_CONFIRM_GO_MEASURE --> ST_MEASURE_WAIT: pu_measure
+    ST_MEASURE_WAIT --> ST_GO_STANDBY: segment deadline elapsed
+    ST_GO_STANDBY --> ST_CONFIRM_STANDBY: TX go-standby (FINE segment-complete TM)
+    ST_CONFIRM_STANDBY --> ST_GO_STANDBY: reply timeout (1st time)
+    ST_CONFIRM_STANDBY --> ST_OFFLOAD: pu_standby
+    ST_CONFIRM_STANDBY --> [*]: reply timeout (2nd time, WARN, abort -- dock link is down)
+    ST_OFFLOAD --> [*]: Flight_PUOffload finishes, offload failed (WARN, abort)
+    ST_OFFLOAD --> [*]: Flight_PUOffload finishes, no measurement time remains (FINE "Finished docked profile")
+    ST_OFFLOAD --> ST_GO_MEASURE: Flight_PUOffload finishes, measurement time remains
 ```
 
-- `docked_profile_time` is a **runtime member set directly by TC 153**
-  (`pibParam.dockedProfileTime`), not an EEPROM config — unlike the equivalent
-  timing in `Flight_Profile`, which reads `preprofile_time` from `pibConfigs`.
-- If `pibConfigs.pu_auto_offload` is set, finishing automatically chains into
-  `Flight_PUOffload` via `SetAction(ACTION_OFFLOAD_PU)` — picked up by
-  `FLM_IDLE` on the next loop after this sub-machine returns.
-- This mode is flagged as a future refactor target (project memory); this
-  document reflects its current, pre-refactor behavior.
+- **Every `[*]` exit above returns `true`, which sends `inst_substate` back to
+  `FLM_IDLE`** (`Flight.cpp` `FLM_DOCKED` case). There are five, and each sends
+  a TM naming the outcome so the ground never has to infer it:
+
+  | Exit | TM | Flag |
+  |---|---|---|
+  | `docked_profile_rate == 0` at entry | `Docked profile: invalid rate, returning to FLM_IDLE` | WARN |
+  | go-measure unacked after 2 attempts | `RPU not responding to go-measure command, returning to FLM_IDLE` | WARN |
+  | go-standby unacked after 2 attempts | `RPU did not confirm standby; aborting docked profile, returning to FLM_IDLE` | WARN |
+  | offload failed | `Docked profile aborted: RPU offload failed, returning to FLM_IDLE` | WARN |
+  | all measurement time used | `Finished docked profile, returning to FLM_IDLE` | FINE |
+
+  The two "unacked after 2 attempts" cases both mean the dock link is down: one
+  retry at `RPU_RECEIVE_TIMEOUT` each, then give up rather than continue into
+  work that cannot succeed. A cancel (TC 156) is *not* in this list — it routes
+  through the standby/offload path and exits via one of the rows above, so the
+  collected records still come down first.
+- `docked_profile_time` / `docked_profile_rate` remain **runtime members set
+  directly by TC 153** (`pibParam.dockedProfileTime`/`Rate`), not EEPROM
+  configs — unlike the offload period, which is EEPROM-backed (TC 157) so it
+  doesn't need to be resent before every profile.
+- **Calls `Flight_PUOffload` as a direct nested function call** (mechanism 3,
+  same pattern `Flight_PUOffload` itself uses for `Flight_CheckPU`) at
+  `ST_OFFLOAD`, once per segment boundary and once at the end.
+  `inst_substate` stays `FLM_DOCKED` for the whole profile; a per-segment
+  `RACHUTSTEXT` TM at `ST_GO_STANDBY` is the ground's visibility into segment
+  progress in place of the `FLM_PU_OFFLOAD` substate transition TC 147 shows.
+- `profile_id` increments **once per docked profile**, at `ST_ENTRY`, not once
+  per segment; `docked_segment` (in `SendRPUREPORT`'s TM) distinguishes
+  segments sharing the same `profile_id`.
+- Segment timing uses local `millis()` deadlines, not `scheduler.AddAction` —
+  deliberately, to avoid the scheduler queue pressure a repeating offload
+  would otherwise add (see `KnownIssues.md` §3 and §15).
+- **TC 156 (`CANCELMEASURE`)** is checked every state (not one) so it takes
+  effect no matter which phase is active. If an offload is already running it
+  is left to finish (data already in flight isn't abandoned) and no further
+  segment starts; otherwise the state machine jumps into the same
+  `ST_GO_STANDBY` path a normal segment boundary uses, just without resuming
+  measure afterward. `TCHandler` already sends `TX_GoStandby` unconditionally
+  when TC 156 lands, independent of this state machine.
+- This mode was previously flagged as a future refactor target (project
+  memory); this document reflects the periodic-offload design.
 
 ---
 

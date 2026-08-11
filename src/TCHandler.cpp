@@ -242,8 +242,12 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         if (!RequireFlightMode("Docked profile", msg3, msg1_flag)) break;
         docked_profile_time = pibParam.dockedProfileTime;
         docked_profile_rate = pibParam.dockedProfileRate;
+        // Echo the offload period too (set separately via TC 157, SETDOCKEDOFFLOADPERIOD)
+        // so the operator can confirm what will actually be used -- it no longer
+        // travels with this command.
         msg2 += ": length=" + String(docked_profile_time) + "s"
               + " rate=" + String(docked_profile_rate) + "s"
+              + " offload_period=" + String(pibConfigs.docked_offload_period.Read()) + "s"
               + " ROPC=" + String(pibConfigs.rpu_enable_ROPC.Read())
               + " TDLAS=" + String(pibConfigs.rpu_enable_TDLAS.Read())
               + " TSEN=" + String(pibConfigs.rpu_enable_TSEN.Read())
@@ -272,6 +276,21 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         msg2 = "TC Cancel Measure";
         puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read()); // no matter what, attempt to send (irrespective of mode)
         SetAction(ACTION_CANCEL_MEASURE);
+        break;
+    case SETDOCKEDOFFLOADPERIOD:
+        pibConfigs.docked_offload_period.Write(pibParam.dockedOffloadPeriod);
+        msg2 = "Set docked_offload_period: " + String(pibConfigs.docked_offload_period.Read());
+        // Warn only *below* the TM resend timeout, not at it: a period equal to
+        // the timeout is a natural choice for bench testing and is not itself a
+        // problem, whereas a shorter one starts the next offload before the
+        // previous offload's RESEND_TM entries have aged out of the scheduler
+        // queue (KnownIssues 3).
+        if (0 < pibConfigs.docked_offload_period.Read() &&
+            pibConfigs.docked_offload_period.Read() < ZEPHYR_RESEND_TIMEOUT) {
+            msg3 = "Warning: period < TM resend timeout (" + String(ZEPHYR_RESEND_TIMEOUT)
+                 + "s) may keep the schedule queue persistently loaded";
+            msg1_flag = WARN;
+        }
         break;
 
     // PU Telecommands ------------------------------------
@@ -346,17 +365,25 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
     TM_ack_flag = NO_ACK;
     ZephyrTXpoke(ZEPHYRTX_TM);
 
-    // Log the TC summary message
+    // Log the TC summary message. msg3 carries the *reason* for a WARN/CRIT
+    // (e.g. "ignored: not in flight mode"), so log it too -- otherwise the local
+    // console shows a bare "ERR: <command>" with no explanation, and the reason
+    // is only visible on the ground in the TC ack TM.
+    String log_msg = msg2;
+    if (msg3.length() > 0) {
+        log_msg += " -- " + msg3;
+    }
+
     switch (msg1_flag) {
     case FINE:
-        log_nominal(msg2.c_str());
+        log_nominal(log_msg.c_str());
         break;
     case WARN:
     case CRIT:
-        log_error(msg2.c_str());
+        log_error(log_msg.c_str());
         break;
     default:
-        log_debug(msg2.c_str());
+        log_debug(log_msg.c_str());
     }
 
     // Deferred actions that send their own TM (run after the ack TM)

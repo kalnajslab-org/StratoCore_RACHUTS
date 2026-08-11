@@ -64,6 +64,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 154 | STARTREALTIMEMCB | Enable real-time MCB data streaming | — |
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
 | 156 | CANCELMEASURE | Cancel an in-progress docked profile (sends RPU to standby, offloads what was collected) | — |
+| 157 | SETDOCKEDOFFLOADPERIOD | Docked profile periodic offload interval (stored in EEPROM) | period (uint16, s); 0 = offload once at the end (legacy) |
 
 ## RPU (Profiler) dock control
 
@@ -87,7 +88,16 @@ Notes:
   setpoint and sensor-enable flags come from the stored RPUCONFIG.
 - **TC 153 (DOCKEDPROFILE)** likewise carries `duration`/`rate` directly
   (not persisted to EEPROM); sensor-enable flags and battery setpoint still
-  come from the stored RPUCONFIG.
+  come from the stored RPUCONFIG. `duration` is the **total measurement
+  time**: if TC 157's offload period is nonzero and shorter than `duration`,
+  the profile runs as a series of measure segments (each ≤ the offload
+  period) with a standby+offload pause between them, and the segments' measured
+  time sums to `duration` -- wall-clock runtime is longer by however long the
+  offload pauses take. `duration = 0` means run indefinitely, offloading
+  every period, until TC 156 (CANCELMEASURE).
+- **TC 157 (SETDOCKEDOFFLOADPERIOD)** is independent of TC 153 and persists
+  in EEPROM, so it does not need to be resent before every docked profile.
+  TC 153's ack echoes the currently-stored period for confirmation.
 
 ## Diagnostics / EEPROM
 

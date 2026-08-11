@@ -43,7 +43,7 @@ bool StratoRachuts::Flight_PUOffload(bool restart_state)
 
     case ST_REQUEST_PACKET:
         puComm.TX_ASCII(RPU_SEND_RECORDS);
-        scheduler.AddAction(RESEND_PU_RECORD, PU_RESEND_TIMEOUT);
+        scheduler.AddAction(RESEND_PU_RECORD, RPU_RECEIVE_TIMEOUT);
         record_received = false;
         pu_no_more_records = false;
         puoffload_state = ST_WAIT_PACKET;
@@ -68,6 +68,7 @@ bool StratoRachuts::Flight_PUOffload(bool restart_state)
         } else if (pu_no_more_records) {
             pu_no_more_records = false;
             log_nominal("No more profile records");
+            pu_offload_success = true;
             return true;
         }
 
@@ -78,6 +79,7 @@ bool StratoRachuts::Flight_PUOffload(bool restart_state)
             } else {
                 resend_attempted = false;
                 SendTextTM("PU not successful in sending profile record", WARN);
+                pu_offload_success = false;
                 return true;
             }
         }
@@ -100,6 +102,7 @@ bool StratoRachuts::Flight_PUOffload(bool restart_state)
 
     default:
         // unknown state, exit
+        pu_offload_success = false;
         return true;
     }
 
