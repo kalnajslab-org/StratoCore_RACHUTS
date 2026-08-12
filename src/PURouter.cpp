@@ -49,7 +49,6 @@ void StratoRachuts::HandlePUAck()
         if (puComm.ack_value) {
             log_nominal("RPU in measure");
             pu_measure = true;
-            pu_standby = false;
         } else {
             SendTextTM("RPU NAKed go-measure command", WARN);
         }
@@ -57,8 +56,6 @@ void StratoRachuts::HandlePUAck()
     case RPU_GO_STANDBY:
         if (puComm.ack_value) {
             log_nominal("RPU in standby");
-            pu_standby = true;
-            pu_measure = false;
         } else {
             SendTextTM("RPU NAKed go-standby command", WARN);
         }

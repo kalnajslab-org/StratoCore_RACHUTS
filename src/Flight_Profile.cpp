@@ -76,7 +76,7 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
         resend_attempted = false;
         // Send the profile command to the PU with the configured parameters
         PUStartProfile();
-        scheduler.AddAction(RESEND_PU_GOPROFILE, RPU_RECEIVE_TIMEOUT);
+        scheduler.AddAction(RESEND_PU_GOPROFILE, PU_RESEND_TIMEOUT);
         profile_state = ST_CONFIRM_PU_PROFILE;
         break;
 

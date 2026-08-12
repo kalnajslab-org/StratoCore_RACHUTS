@@ -32,12 +32,7 @@
 #define FLAG_STALE      3
 
 #define MCB_RESEND_TIMEOUT      10
-// How long to wait for an RPU reply before retrying a dock command. Observed
-// RPU turnaround on the bench: ~0.6 s for a status reply, ~1.1 s for a
-// go-measure/go-standby ack, ~1.9 s for the largest (7692 B) record block --
-// so 6 s leaves roughly 3x margin on the slowest case while cutting the
-// dead time on an unresponsive RPU from 20 s to 12 s per two-attempt sequence.
-#define RPU_RECEIVE_TIMEOUT     6
+#define PU_RESEND_TIMEOUT       10
 #define ZEPHYR_RESEND_TIMEOUT   60
 
 #define RETRY_DOCK_LENGTH   2.0f
@@ -257,15 +252,8 @@ private:
     bool record_received = false;
     bool pu_no_more_records = false;
     bool pu_measure = false;
-    bool pu_standby = false;
     bool pu_preprofile = false;
     bool check_pu_success = false;
-    bool pu_offload_success = false;
-
-    // segment counter for a docked profile's periodic offloads (0 = not a
-    // docked-profile offload); included in RPUREPORT so (profile_id, segment,
-    // packet) stays unique across a multi-segment docked profile
-    uint8_t docked_segment = 0;
 
     // uint32_t start time of the current profile in millis
     uint32_t profile_start = 0;

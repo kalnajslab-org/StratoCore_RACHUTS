@@ -211,14 +211,6 @@ blocks.
 Note the same latent leak exists in the other state machines (Flight_Profile,
 ReDock, ManualMotion) — they just don't iterate fast enough to overflow.
 
-A docked profile with a nonzero `docked_offload_period` (TC 157) now calls
-`Flight_PUOffload` multiple times per profile instead of once, so this
-exposure recurs at every segment boundary rather than a single time at the
-end. `Flight_DockedProfile` itself was moved off `scheduler.AddAction` to
-local `millis()` deadlines specifically to avoid adding to this queue (see
-§15, closed); `Flight_PUOffload`'s own `RESEND_PU_RECORD`/`RESEND_TM` usage is
-unchanged and remains the actual source of this issue.
-
 **Identified proper fix (deferred — shared-lib change).** The scheduler is *not
 designed for the same action to be on the queue more than once*: there is a
 single flag per action (`action_flags[action]`), so multiple queued copies of
@@ -262,21 +254,18 @@ which RATS lacks).
 
 ---
 
-## 5. RPU measurement cadence and unused parameters — **RESOLVED**
+## 5. RPU measurement cadence and unused parameters — **OPEN**
 
-All three items below are fixed in the current RPU firmware (`RPU/src/RPU/RPU.cpp`);
-this section is kept only as a record of what was fixed.
-
-- **Sample cadence drift** — fixed: `measure_timer = (uint32_t)measure_timer % 1000;`
-  (RPU.cpp:401) preserves phase instead of discarding overshoot.
-- **`MeasureRate`** is honored: `tickMeasure`'s save gate is
-  `save_timer >= save_interval_ms` (RPU.cpp:455), derived from the received rate.
-- **`MeasureDuration`** is honored: the RPU auto-enters STANDBY once
-  `(millis() - MeasureStartMillis) >= MeasureDurationSecs * 1000` (RPU.cpp:462-466),
-  with `0` meaning unlimited. This is load-bearing for the docked profile's
-  periodic-offload design (`Flight_DockedProfile.cpp`): each measure segment's
-  duration is sent as the RPU's own `GO_MEASURE` duration, so the RPU stops
-  itself even if the RACHUTS-side link or timer dies mid-segment.
+- **Sample cadence drifts to ~1.04 s/record** instead of 1.0 s. `tickMeasure`
+  uses `if (tick_timer < 1000) return; tick_timer = 0;` — resetting to 0
+  discards the per-loop overshoot, so the period locks in at ~1.04 s and
+  accumulates (120 records span ~125 s). `elapsed_s` (set from
+  `(millis() - MeasureStartMillis)/1000`) honestly reports the drifted times, so
+  this is **not** record loss. Fix: `tick_timer -= 1000;` to preserve phase.
+- **`MeasureRate` is ignored.** Received in `RPU_GO_MEASURE` but `tickMeasure`
+  hard-codes 1000 ms.
+- **`MeasureDuration` is ignored.** The RPU never auto-returns to STANDBY; it
+  runs MEASURE until commanded.
 
 ---
 
@@ -573,17 +562,9 @@ measurement. It unconditionally sends the RPU to standby (`TX_GoStandby`, same
 as `RPUGOSTANDBY`) and sets a new `ACTION_CANCEL_MEASURE` flag.
 `Flight_DockedProfile` checks that flag **once, at the top of the function,
 ahead of the state switch** — deliberately not state-specific, to avoid
-exactly this issue's own failure mode — so a cancel takes effect regardless of
-which phase the profile is in.
-
-Now that the docked profile periodically offloads (`docked_offload_period`,
-TC 157) instead of only once at the end, the cancel handler is state-aware in
-one respect: if an offload is already in progress (`ST_OFFLOAD`) it lets that
-offload finish rather than abandoning or restarting it, and it always clears
-the "resume measure" bit so no further segment starts once the current
-offload completes. It still returns `false` (stays in `FLM_DOCKED`) rather
-than `true`, so the state machine doesn't leave until the collected data has
-actually been offloaded.
+exactly this issue's own failure mode — so a cancel takes effect immediately
+regardless of which phase (go-measure handshake or measure-wait) the profile
+is in, sends the collected data to offload, and returns.
 
 **Still open (manual profile):** `Flight_Profile`'s per-state gap is
 unchanged — `CANCELMOTION` still only works during `ST_MONITOR_MOTION`.
@@ -600,27 +581,28 @@ dock-wait timer, post-dock PU check, MCB-low-power confirm), not just
 
 ---
 
-## 15. `Flight_DockedProfile` could hang forever if a scheduler `AddAction` silently fails — **RESOLVED**
+## 15. `Flight_DockedProfile` could hang forever if a scheduler `AddAction` silently fails — **OPEN (unlikely)**
 
 **Symptom.** None observed; theoretical, found by code inspection.
 
-**Original root cause.** `Flight_DockedProfile()`'s only paths to `return true`,
-besides the ground-triggered `ACTION_CANCEL_MEASURE` cancel, were two scheduled
-timer actions: `RESEND_PU_GOPROFILE` (`ST_CONFIRM_GO_MEASURE`) and
-`ACTION_END_PREPROFILE` (`ST_MEASURE_WAIT`), both armed via
-`scheduler.AddAction(...)` whose `bool` return — `false` when the scheduler's
-32-slot queue is full, see §3 — was never checked. A silently-failed
-`AddAction` would leave the state machine waiting on a `CheckAction` that
-never fires.
+**Root cause.** `Flight_DockedProfile()`'s only paths to `return true`, besides
+the ground-triggered `ACTION_CANCEL_MEASURE` cancel, are two scheduled timer
+actions: `RESEND_PU_GOPROFILE` (`ST_CONFIRM_GO_MEASURE` — retried once, then
+bails with a WARN if the RPU never ACKs) and `ACTION_END_PREPROFILE`
+(`ST_MEASURE_WAIT`). Both are armed via `scheduler.AddAction(...)`
+(`Flight_DockedProfile.cpp:45,56`), whose `bool` return — `false` when the
+scheduler's 32-slot queue is full, see §3 — is never checked at either call
+site. If `AddAction` silently fails, the corresponding `CheckAction` never
+fires, and the state machine sits in `ST_CONFIRM_GO_MEASURE` or
+`ST_MEASURE_WAIT` indefinitely with no automatic recovery — only a
+ground-issued `CANCELMEASURE` (TC 156) can get it out.
 
-**Fix.** When periodic offload (`docked_offload_period`, TC 157) was added,
-`Flight_DockedProfile.cpp` was moved off `scheduler.AddAction` entirely for
-its own segment/reply timers, in favor of local `millis()` deadline
-comparisons (`(int32_t)(millis() - deadline) >= 0`). This has no failure mode
-that depends on queue occupancy, so the hang this section described is no
-longer possible for this file. `Flight_PUOffload.cpp`'s own
-`RESEND_PU_RECORD`/`RESEND_TM` scheduler usage is unchanged and is still
-covered by §3.
+**Likelihood.** Low — requires ~32 other actions already queued at the moment
+the docked profile starts. Same underlying cause as §3 (the scheduler queue is
+unbounded-appending and never dedupes); the proper fix proposed there
+(`AddAction` dedupe) would close this gap too, as would simply checking
+`AddAction`'s return value here and treating a full queue as a bail-out
+condition (e.g. WARN + `return true`).
 
 ---
 
@@ -684,48 +666,6 @@ the StratoCore source of truth, not just this repo's vendored copy.
 
 ---
 
-## 17. Bench TM blackout after physically reconnecting the RPU — **OPEN**
-
-**Symptom.** ZephyrSim stops receiving TMs entirely. It keeps *sending*
-normally — GPS and TCs still reach RACHUTS and are acted on — so only the
-instrument-to-ground direction is affected.
-
-**Trigger.** Physically disconnecting and reconnecting the RPU. It reproduces
-regardless of which mode RACHUTS is in, and does not depend on a docked profile
-or an offload being in progress.
-
-**Not RACHUTS.** Confirmed by stopping ZephyrSim and watching the port directly
-with `screen`: RACHUTS is still transmitting well-formed XML with valid CRCs
-throughout a blackout. ZephyrSim also reports no serial port error, no framing
-error, and no CRC error while it is happening.
-
-**Recovery.** Restarting ZephyrSim restores the link — which is itself a clue,
-since that closes and reopens the FTDI port.
-
-**Notes.** The path is a plain 3-wire RS-232 connection (TX/RX/GND, no flow
-control) into ZephyrSim's serial port via an FTDI cable. With only GND shared,
-a hot-plug transient on the RPU dock has a direct route into the link's
-reference. That the fault clears on reopen — rather than on its own, and
-without any error being reported — points at the adapter/driver receive path
-latching, not at data corruption.
-
-**Worth trying:**
-- Power the dock down first (TC 145 `PUPOWEROFF`) before unplugging the RPU,
-  and back up (TC 144) after; if that avoids it, the trigger is the hot-plug
-  transient rather than the reconnect itself.
-- A different USB-serial adapter, ideally a galvanically isolated one, to test
-  whether the latch is FTDI/driver specific.
-- Check whether the RPU and RACHUTS share a supply, so that dock inrush returns
-  through the same ground the FTDI cable references.
-
-**Flight relevance.** The FTDI-specific part is a bench artifact — flight uses a
-real Zephyr OBC, not a USB adapter on a laptop. But the RPU dock connector *does*
-make and break in normal flight operation, so the underlying mechanism (a dock
-hot-plug transient coupling into the Zephyr link) is not automatically
-bench-only and should not be dismissed on that basis.
-
----
-
 ## Appendix A — RACHUTS Telemetry (TM) catalog
 
 Every RACHUTS TM is a Zephyr/StrateoleXML telemetry message identified on the
@@ -738,7 +678,7 @@ StateMess2/3 are empty (omitted from the XML).
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
 | `RACHUTSREPORT` | `SendRACHUTSREPORT(rpu_block, source)` — sole caller is `SendPeriodicRACHUTSREPORT()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"rachuts":{"epoch","mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. `epoch` is the PIB system time (Unix seconds via `now()`, like RATSREPORT's header epoch; unset until the RTC is set from GPS). The `rachuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
-| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> segment:<docked_segment> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented once per docked profile — or per manual profile — not part of the RPU record itself; `docked_segment` increments once per periodic offload within a docked profile and is 0 for a standalone TC 147 offload, distinguishing segments that share one `profile_id`) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 7692 B/block. |
+| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented on go-measure send — not part of the RPU record itself) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 7692 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |

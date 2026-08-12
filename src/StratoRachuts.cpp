@@ -79,7 +79,7 @@ void StratoRachuts::LoRaInit()
 {
    if (!LoRa.begin(FREQUENCY)){
        SendTextTM("Starting LoRa failed!", WARN);
-       log_error("LoRa initialization failed");
+       Serial.println("WARN: LoRa Initializtion Failed");
     }
     delay(1);
     LoRa.setSpreadingFactor(SF);
@@ -93,8 +93,8 @@ void StratoRachuts::LoRaRX()
 {
     if (PacketSize > 0) {
         PacketSize = 0;
-        snprintf(log_array, LOG_ARRAY_SIZE, "LoRa pkt RSSI: %d", LoRa.packetRssi());
-        log_nominal(log_array);
+        Serial.print("LoRa pkt RSSI:");
+        Serial.println(LoRa.packetRssi());
 
         int BytesToRead = LoRa.available();
         for (int i = 0; i < BytesToRead; i++)
@@ -104,29 +104,28 @@ void StratoRachuts::LoRaRX()
         if (rpu_packet.decode((const uint8_t*)LoRa_RX_buffer, BytesToRead))
         {
             String json_str = rpu_packet.toJSON();
-            // The full status JSON exceeds LOG_ARRAY_SIZE (101), so it can't go
-            // through log_nominal() without truncation -- write it to the same
-            // configured debug stream the log_*() functions use, rather than
-            // hard-coding Serial. (The short lines above/below do use log_*() so
-            // they carry the NOM:/ERR: prefix and show up in debug captures.)
-            debug_serial->println(json_str);
+            for (size_t i = 0; i < json_str.length(); i++) {
+                Serial.write(json_str[i]);
+                if (json_str[i] == ',') Serial.println();
+            }
+            Serial.println();
 
-            // Capture only -- the mode loops are the single RACHUTSREPORT sender
-            // and will incorporate this on their next reporting tick. Deliberately
-            // does NOT force an immediate report: doing so put a RACHUTSREPORT
-            // (and its zephyrTX.clearTm()) in between an offload's RPUREPORT and
-            // that RPUREPORT's resend, so the resend went out with an empty
-            // payload -- confirmed on the bench. A LoRa status now simply rides
-            // along on the next scheduled report.
+            // Capture only -- the mode loops are the single RACHUTSREPORT sender and
+            // will incorporate this on their next reporting tick. Sending here
+            // (asynchronously, mid-loop) races the mode-loop TM and drops. Setting
+            // force_rachutsreport makes that next tick happen on the following
+            // loop iteration rather than waiting out the periodic interval, so
+            // every LoRa status report is reported immediately.
             latest_rpu_json = json_str;
             latest_rpu_src = "LORA";
             last_rpu_recv_ms = millis();
             rpu_ever_received = true;
             rpu_status_pending = true;
+            force_rachutsreport = true;
         }
         else
         {
-            log_error("Failed to decode RPUPacket");
+            Serial.println("Failed to decode RPUPacket");
         }
     }
     return;
@@ -180,14 +179,11 @@ void StratoRachuts::SendRACHUTSREPORT(const String& rpu_block, const String& sou
 
 // Every-loop RACHUTSREPORT driver for SB/FL/SA/LP. The mode loops are the single
 // sender: once per rpu_status_rate period -- or immediately when a substate sets
-// force_rachutsreport (e.g. a TC 143 status request, which must not be held up by
-// time-critical substate work) -- transmit a RACHUTSREPORT incorporating the most
-// recent captured RPU status (LoRa or dock) if one arrived since the last report,
-// otherwise header-only. A rate of 0 disables periodic reporting but not forced.
-//
-// Note that receiving an RPU status does NOT force a report; only an explicit
-// ground request does. Forcing on every LoRa status made reports land at
-// arbitrary points, including inside an offload's send/resend window. See LoRaRX().
+// force_rachutsreport (e.g. a TC 143 status request, or a freshly received LoRa
+// status report, either of which must not be held up by time-critical substate
+// work) -- transmit a RACHUTSREPORT incorporating the most recent captured RPU
+// status (LoRa or dock) if one arrived since the last report, otherwise
+// header-only. A rate of 0 disables periodic reporting but not forced.
 void StratoRachuts::SendPeriodicRACHUTSREPORT()
 {
     uint16_t rate = pibConfigs.rpu_status_rate.Read();

@@ -10,10 +10,10 @@
 |---|---------------|----------|--------|----------------|
 | 1 | Initiate | — | Go Flight — Zephyr IM message (Mode = FL) | — |
 | 2 | Configure | — | Set preprofile time to 60s | `148,60` |
-| 3 | 1st Docked Measure | 8 hours | Set RACHUTSREPORT cadence to 1 hour, offload every 30 minutes so data comes down periodically instead of only at the end, then docked measurement, 8 hours total, 30s measurement cadence, only TSEN and RSS421 on | `181,3600` → `157,1800` → `180,28800,30,0,0,1,1` → `153,28800,30` |
+| 3 | 1st Docked Measure | 8 hours | Set RACHUTSREPORT cadence to 1 hour, then docked measurement, 8 hours, 30s measurement cadence, only TSEN and RSS421 on | `181,3600` → `180,28800,30,0,0,1,1` → `153,28800,30` |
 | 4 | 1st Profile Measure | ~11.5 min (est.) | Set RACHUTSREPORT cadence to 10 minutes, then profile, all instruments on, length 1000, dock 100, overshoot 50, dwell 120s | `181,600` → `146,1000,100,50,120` |
 | 5 | 2nd Profile Measure | ~40.4 min (est.) | Set RACHUTSREPORT cadence to 10 minutes, then profile, all instrumetns on, length 4000, dock 250, overshoot 100, dwell 300s | `181,600` → `146,4000,250,100,300` |
-| 6 | 2nd Docked Measure | 2 hours | Set RACHUTSREPORT cadence to 1 hour, offload every 30 minutes, then docked measurement, 2 hours total, 10s measurement cadence, all sensors on | `181,3600` → `157,1800` → `180,7200,10,1,1,1,1` → `153,7200,10` |
+| 6 | 2nd Docked Measure | 2 hours | Set RACHUTSREPORT cadence to 1 hour, then docked measurement, 2 hours, 10s measurement cadence, all sensors on | `181,3600` → `180,7200,10,1,1,1,1` → `153,7200,10` |
 | 7 | 3rd Profile Measure | ~1h 13min (est.) | Set RACHUTSREPORT cadence to 10 minutes, then profile, all instruments on, length 7000, dock 500, overshoot 200, dwell 600s | `181,600` → `146,7000,500,200,600` |
 | 8 | Reset RACHUTSREPORT cadence | — | Set RACHUTSREPORT cadence back to 1 hour | `181,3600` |
 | 9 | Standby | — | Go standby — Zephyr IM message (Mode = SB) | — |
