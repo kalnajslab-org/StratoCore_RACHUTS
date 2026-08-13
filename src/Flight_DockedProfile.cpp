@@ -53,7 +53,7 @@ bool StratoRachuts::Flight_DockedProfile(bool restart_state)
             // should already be returning to standby on its own; give it a
             // couple seconds' head start before RACHUTS's own timer also sends
             // it to standby as a backup, so it's enforced in two places.
-            scheduler.AddAction(ACTION_END_PREPROFILE, docked_profile_time + 2);
+            scheduler.AddAction(ACTION_END_DOCKED_PROFILE, docked_profile_time + 2);
             profile_state = ST_MEASURE_WAIT;
         } else if (CheckAction(RESEND_PU_GOPROFILE)) {
             if (!resend_attempted) {
@@ -68,7 +68,7 @@ bool StratoRachuts::Flight_DockedProfile(bool restart_state)
         break;
 
     case ST_MEASURE_WAIT:
-        if (CheckAction(ACTION_END_PREPROFILE)) {
+        if (CheckAction(ACTION_END_DOCKED_PROFILE)) {
             SendTextTM("Finished docked profile", FINE);
             puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read());
             SetAction(ACTION_OFFLOAD_PU);
