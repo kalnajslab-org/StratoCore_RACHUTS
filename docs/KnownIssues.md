@@ -524,6 +524,33 @@ adding a second one), or make `ClearSchedule()`/`ClearActionFlags()` run
 consistently on every sub-machine's clean return, not just on `MODE_ERROR`
 paths.
 
+**Observed in the wild: `Flight_DockedProfile` / `ACTION_END_PREPROFILE`
+(2026-08-12 session).** A first `TC Docked Profile` (21:13:00, 21600 s) armed
+`ACTION_END_PREPROFILE` for ≈03:13:03. `TC Cancel Measure` at 21:16:04
+returned cleanly from `Flight_DockedProfile` without touching the still-queued
+timer. A second `TC Docked Profile` at 21:16:39 re-entered `ST_MEASURE_WAIT`
+and was sitting there when the first run's stale timer fired at 03:13:03,
+3 m 36 s before the real end — `Flight_DockedProfile` read the leftover flag
+as its own completion and started an offload early. The RPU itself was
+unaffected (its onboard timer, set independently by the go-measure command,
+completed correctly at 03:16:39.647) only because the go-standby sent on that
+false completion (see §17) never reached it.
+
+This also surfaced a second, independent problem: `ACTION_END_PREPROFILE` is
+shared between two unrelated sub-machines. `Flight_Profile.cpp` uses it for
+the genuine "pre-profile" instrument warmup wait (`pibConfigs.preprofile_time`,
+default 180 s) ahead of a manual profile's reel-out; `Flight_DockedProfile.cpp`
+reused the same value for the end of the entire multi-hour measurement. Since
+`action_flags[]` is one flat, instrument-wide array keyed by action *type*,
+this reuse widened the collision surface beyond "re-entering the same
+sub-machine" — a stale, not-yet-fired `ACTION_END_PREPROFILE` left behind by
+an aborted *manual* profile could in principle be misread as completion by an
+unrelated docked profile (and vice versa). Fixed by giving
+`Flight_DockedProfile` its own dedicated `ACTION_END_DOCKED_PROFILE` symbol;
+the underlying reentrancy gap (a stale same-machine timer surviving a
+cancel-and-retry) is unchanged and still needs the §13/§3 `AddAction` dedupe
+fix, or a local expected-fire-time guard, to be fully closed.
+
 ---
 
 ## 14. `CANCELMOTION` only cancels a profile during its motion-in-progress window — **PARTIALLY FIXED**
@@ -663,6 +690,30 @@ comparison in `ReadVerifyCRC`, and/or logging a `ZephyrLogWarn` on any
 `GetNewMessage()` parse failure so a corrupted-but-framed-enough message at
 least produces *some* TM) needs validating across instruments and landing in
 the StratoCore source of truth, not just this repo's vendored copy.
+
+---
+
+## 17. `Flight_DockedProfile`'s end-of-profile go-standby is fire-and-forget — **OPEN**
+
+`ST_MEASURE_WAIT`'s completion path (`Flight_DockedProfile.cpp:70-76`) calls
+`puComm.TX_GoStandby(...)` and immediately proceeds to
+`SetAction(ACTION_OFFLOAD_PU)` with no ACK check and no resend armed — unlike
+`ST_GO_MEASURE`/`ST_CONFIRM_GO_MEASURE`, which retry once via
+`RESEND_PU_GOPROFILE` before giving up. `PURouter::HandlePUAck()` already has
+a `case RPU_GO_STANDBY:` handler (`PURouter.cpp:56-62`) that logs the ACK/NAK
+but sets no flag, so there is no signal `Flight_DockedProfile` could even
+check today. Combined with the SerialComm "no transport ack/nak" weakness
+(§2), a single lost/garbled go-standby frame goes completely unnoticed —
+confirmed on 2026-08-12 (see §13a): during the premature-completion episode
+there, the RPU never received the go-standby command and kept measuring,
+unaware it had been told to stop, until its own onboard timer correctly ended
+the measurement 3 m 36 s later.
+
+**Proposed fix.** Add a `pu_standby` flag set in `HandlePUAck()`'s
+`RPU_GO_STANDBY` case (mirroring `pu_measure` in the `RPU_GO_MEASURE` case),
+and give the end-of-profile path the same confirm/resend state used for
+go-measure (`ST_CONFIRM_GO_MEASURE`'s `resend_attempted` pattern), bounded so
+it can't hang forever.
 
 ---
 
