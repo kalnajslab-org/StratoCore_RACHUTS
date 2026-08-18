@@ -310,6 +310,20 @@ timeouts. Removed; the USB `Serial.println(json)` was kept.
 
 ## 9. Hardware notes — RS-232 transceivers (MAX3381ECUP)
 
+**Charge-pump/rail-droop theory retracted (2026-08-13).** The last bullet
+below ("Charge-pump capacitors") documented a hypothesis that a marginal
+MAX3381 charge pump was causing intermittent bit errors on the dock link
+under sustained bursts. **This is invalid — confirmed in the lab:** the dock
+link was swapped from RS-232 to TTL (bypassing the MAX3381 transceiver
+entirely) and back again, and the symptom it was meant to explain was
+unaffected either way. See §1's own "Superseded theory" note — the actual
+root cause of that symptom was a `SerialComm::ReadChecksum()` software race
+producing false checksum-invalid flags on data that had in fact arrived
+byte-for-byte correctly, since fixed. The capacitor-value guidance below is
+kept only as a historical record of a dead-end investigation, not as
+actionable hardware advice — it should not be cited as a cause or fix for any
+future comms symptom.
+
 - Both the dock and Zephyr links use **MAX3381ECUP** RS-232 transceivers with
   AutoShutdown Plus.
 - **Mode pins:** `FORCEOFF=LOW` → full shutdown; `FORCEON=LOW, FORCEOFF=HIGH` →
@@ -321,12 +335,14 @@ timeouts. Removed; the USB `Serial.println(json)` was kept.
   MonDo and Rev E"* and never driven — the dock/Zephyr transceiver mode is set by
   hardware strapping. Worth confirming on the schematic whether that side is
   strapped forced-on or left in auto-powerdown.
-- **Charge-pump capacitors (relevant to §1 droop):** typical MAX338xE operating
-  circuit is **0.1 µF** on all pump/reservoir caps (C1, C2 flying; C3 V+, C4 V−
-  reservoir; VCC bypass) for 3.0–5.5 V; low-ESR X7R/X5R. Confirm the exact value
-  vs the datasheet for the board's VCC. Undersized/high-ESR/cracked **reservoir
-  caps (C3/C4)** cause the rail droop that produces the intermittent bit errors;
-  bumping C3/C4 (e.g. 0.22–0.47 µF) improves holdup under sustained bursts.
+- ~~**Charge-pump capacitors (relevant to §1 droop):** typical MAX338xE
+  operating circuit is **0.1 µF** on all pump/reservoir caps (C1, C2 flying;
+  C3 V+, C4 V− reservoir; VCC bypass) for 3.0–5.5 V; low-ESR X7R/X5R. Confirm
+  the exact value vs the datasheet for the board's VCC. Undersized/high-ESR/
+  cracked **reservoir caps (C3/C4)** cause the rail droop that produces the
+  intermittent bit errors; bumping C3/C4 (e.g. 0.22–0.47 µF) improves holdup
+  under sustained bursts.~~ **(retracted — see note above; there is no rail
+  droop and no bit-error mechanism here.)**
 
 ---
 
