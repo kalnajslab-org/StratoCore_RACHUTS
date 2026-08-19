@@ -244,6 +244,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         docked_profile_rate = pibParam.dockedProfileRate;
         msg2 += ": length=" + String(docked_profile_time) + "s"
               + " rate=" + String(docked_profile_rate) + "s"
+              + " offload=" + String(pibConfigs.docked_offload_period.Read()) + "s"
               + " ROPC=" + String(pibConfigs.rpu_enable_ROPC.Read())
               + " TDLAS=" + String(pibConfigs.rpu_enable_TDLAS.Read())
               + " TSEN=" + String(pibConfigs.rpu_enable_TSEN.Read())
@@ -272,6 +273,22 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         msg2 = "TC Cancel Measure";
         puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read()); // no matter what, attempt to send (irrespective of mode)
         SetAction(ACTION_CANCEL_MEASURE);
+        break;
+    case SETDOCKEDOFFLOADPERIOD:
+        msg2 = "TC Set Docked Offload Period";
+        // Reject rather than just warn, below the TM resend timeout (not at it --
+        // a period equal to the timeout is a natural choice for bench testing and
+        // is not itself a problem): a shorter period starts the next offload
+        // before the previous offload's RESEND_TM entries have aged out of the
+        // scheduler queue (KnownIssues 3). Leaves the previously stored value in
+        // place.
+        if (0 < pibParam.dockedOffloadPeriod && pibParam.dockedOffloadPeriod < ZEPHYR_RESEND_TIMEOUT) {
+            msg3 = "Rejected: period < " + String(ZEPHYR_RESEND_TIMEOUT) + "s min";
+            msg1_flag = WARN;
+        } else {
+            pibConfigs.docked_offload_period.Write(pibParam.dockedOffloadPeriod);
+            msg2 += ": " + String(pibConfigs.docked_offload_period.Read());
+        }
         break;
 
     // PU Telecommands ------------------------------------
