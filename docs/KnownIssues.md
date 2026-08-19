@@ -3,7 +3,7 @@
 A running record of bugs, design weaknesses, and hardware quirks in the
 RACHUTS PIB firmware and the RPU (Profiler Unit) firmware, with root causes and
 status. Spans two repos: `StratoCore_RACHUTS` (PIB, the dock master) and `RPU`
-(the profiler, the dock slave). Last updated 2026-08-10.
+(the profiler, the dock slave). Last updated 2026-08-19.
 
 Status legend: **FIXED** · **MITIGATED** (worked around, root cause remains) ·
 **OPEN** (identified, not yet addressed).
@@ -65,19 +65,41 @@ wherever `SerialComm` is used) — it's just statistically much rarer to trigger
 on short messages, which may explain some of the very infrequent, previously
 unexplained aberrant behavior seen elsewhere and chalked up to noise.
 
-**Fix applied** (2026-08-10, both repos' vendored
-`.pio/libdeps/.../SerialComm/SerialComm.cpp`, not yet in application code):
-added a bounded wait (`while (timeout > millis() &&
-!serial_stream->available());`) before the closing-`;` read, matching how
-every other delimiter in the file is read. Deliberately *not* implemented via
-`ReadSpecificChar`/`GetNextChar`, since those update the running checksum
-accumulator — this trailing `;` must stay outside the checksum (mirrors
-`WriteChecksum()`'s own trailing `WriteChar(';')` on the TX side, written
-*after* `combined_checksum` is already captured). **Confirmed via simulator
-testing (2026-08-10)** — checksum failures resolved. Not yet confirmed on
-real flight hardware. **Upstreamed into the `SerialComm` GitHub source**
-(no longer just a local vendored patch — a fresh `pio` lib fetch on either
-repo should now pull the fix directly).
+**Fix applied.** The first attempt (2026-08-10, `SerialComm@0f355e1`) added a
+bounded wait using `available()` before the closing-`;` read. That version was
+superseded (2026-08-12, `SerialComm@d9e1ca6`, "Trying a different checksum
+read logic") by a cleaner approach: rather than a separate trailing wait after
+the digit loop, the closing `;` is now read inside the *same* `peek()`/`read()`
+polling loop as the checksum digits, giving uniform semantics across the whole
+checksum-plus-delimiter read instead of two differently-implemented steps back
+to back:
+```cpp
+while (timeout > millis() && temp < 6) {
+    read_ret = serial_stream->peek();
+    if (-1 == read_ret) continue;
+    rx_char = (char) read_ret;
+    if (rx_char == ';') {
+        serial_stream->read();
+        found_delimiter = true;
+        break;
+    }
+    rx_char = serial_stream->read();
+    checksum_buffer[temp++] = rx_char;
+}
+if (!found_delimiter) return false;
+```
+Deliberately *not* implemented via `ReadSpecificChar`/`GetNextChar`, since
+those update the running checksum accumulator — this trailing `;` must stay
+outside the checksum (mirrors `WriteChecksum()`'s own trailing
+`WriteChar(';')` on the TX side, written *after* `combined_checksum` is
+already captured). This is the current, tested version of `ReadChecksum` -- unrelated to a
+separate ground-TM blackout investigated around the same time, which turned
+out to be hardware (USB ground loops), not a `SerialComm` bug. An intermediate
+`ReadChecksum` revision was briefly (and incorrectly) suspected as the
+blackout's cause; that revision has since been reverted and is not what's
+described here.
+**Upstreamed into the `SerialComm` GitHub source** (no longer just a local
+vendored patch — a fresh `pio` lib fetch on either repo pulls this directly).
 
 **Superseded theory (kept for history).** The original diagnosis blamed
 physical-layer signal integrity on the RS-232 dock link — a **MAX3381ECUP**
@@ -198,8 +220,8 @@ request/reply pairs.
 **Root cause.** The scheduler is a fixed **32-slot** queue (`MAX_SCHEDULE_SIZE`,
 StratoScheduler.h). Each offload block schedules two timeout actions that are
 **never cancelled on success**:
-- `ST_REQUEST_PACKET` → `AddAction(RESEND_PU_RECORD, 10 s)`
-- `ST_WAIT_PACKET` → `AddAction(RESEND_TM, 60 s)`
+- `ST_REQUEST_PACKET` → `AddAction(RESEND_PU_RECORD, RPU_RECEIVE_TIMEOUT)` (6 s)
+- `ST_WAIT_PACKET` → `AddAction(RESEND_TM, ZEPHYR_RESEND_TIMEOUT)` (60 s)
 
 A scheduled item only leaves the queue when its timer *fires* (or on mode
 switch); `AddAction` does not dedupe. At ~1.7 s/block, the 60 s `RESEND_TM`
@@ -236,6 +258,24 @@ sooner:**
 - Or temporarily shorten `ZEPHYR_RESEND_TIMEOUT` to ~20 s (queue occupancy ≈
   timeout ÷ block period, so < ~30 s stays under 32 at the current block rate) —
   fragile and rate-dependent, treat as temporary.
+
+**Contained mitigation applied for one call path (periodic docked-profile
+offload).** `Flight_DockedProfile`'s `ST_ENTRY` now rejects a profile outright
+(`WARN`, no measurement starts) if the longest period it would run needs more
+than `MAX_DOCKED_PERIOD_TMS` (`MAX_SCHEDULE_SIZE * 3/4` = 24) record blocks at the
+commanded sample rate:
+```
+longest_period_s > MAX_DOCKED_PERIOD_TMS * RPU_TM_MAX_RECORDS * docked_profile_rate
+```
+using `docked_profile_time` in place of the period when `docked_offload_period
+== 0` (single-period/legacy mode). This prevents *that* call path from ever
+starting an offload burst large enough to hit this section's overflow — it does
+not touch `Flight_PUOffload`'s own uncancelled `AddAction` calls above, which
+remain the root cause and are still fully open for TC 147 (`OFFLOADPUPROFILE`)
+manual offloads and for any docked profile the guard permits. `docked_profile_time`
+is always nonzero by the time this runs (a docked profile must have a finite
+duration — see the design doc's "design-error correction"), so this guard has
+no unboundable case to carve out.
 
 ---
 
@@ -567,6 +607,16 @@ the underlying reentrancy gap (a stale same-machine timer surviving a
 cancel-and-retry) is unchanged and still needs the §13/§3 `AddAction` dedupe
 fix, or a local expected-fire-time guard, to be fully closed.
 
+**Closed for `Flight_DockedProfile` specifically (periodic-offload rebuild).**
+The rebuilt `Flight_DockedProfile` no longer calls `scheduler.AddAction` at
+all — `ACTION_END_DOCKED_PROFILE` and `RESEND_PU_GOPROFILE` are unused by this
+file now, replaced by local `millis()` deadlines compared with
+`(int32_t)(millis() - deadline) >= 0`. A cancel-and-retry can no longer leave a
+stale scheduled action behind for this file to misread, since none is ever
+armed. The general `AddAction`-never-dedupes root cause (§13/§3) is unchanged
+and still open for every other sub-machine, including `Flight_PUOffload`,
+which this rebuild nests inside `Flight_DockedProfile` without changing.
+
 ---
 
 ## 14. `CANCELMOTION` only cancels a profile during its motion-in-progress window — **PARTIALLY FIXED**
@@ -624,28 +674,27 @@ dock-wait timer, post-dock PU check, MCB-low-power confirm), not just
 
 ---
 
-## 15. `Flight_DockedProfile` could hang forever if a scheduler `AddAction` silently fails — **OPEN (unlikely)**
+## 15. `Flight_DockedProfile` could hang forever if a scheduler `AddAction` silently fails — **RESOLVED**
 
 **Symptom.** None observed; theoretical, found by code inspection.
 
-**Root cause.** `Flight_DockedProfile()`'s only paths to `return true`, besides
-the ground-triggered `ACTION_CANCEL_MEASURE` cancel, are two scheduled timer
-actions: `RESEND_PU_GOPROFILE` (`ST_CONFIRM_GO_MEASURE` — retried once, then
-bails with a WARN if the RPU never ACKs) and `ACTION_END_PREPROFILE`
-(`ST_MEASURE_WAIT`). Both are armed via `scheduler.AddAction(...)`
-(`Flight_DockedProfile.cpp:45,56`), whose `bool` return — `false` when the
-scheduler's 32-slot queue is full, see §3 — is never checked at either call
-site. If `AddAction` silently fails, the corresponding `CheckAction` never
-fires, and the state machine sits in `ST_CONFIRM_GO_MEASURE` or
-`ST_MEASURE_WAIT` indefinitely with no automatic recovery — only a
-ground-issued `CANCELMEASURE` (TC 156) can get it out.
+**Original root cause.** `Flight_DockedProfile()`'s only paths to `return true`,
+besides the ground-triggered `ACTION_CANCEL_MEASURE` cancel, were two scheduled
+timer actions: `RESEND_PU_GOPROFILE` (`ST_CONFIRM_GO_MEASURE` — retried once,
+then bails with a WARN if the RPU never ACKs) and `ACTION_END_PREPROFILE`
+(`ST_MEASURE_WAIT`). Both were armed via `scheduler.AddAction(...)`, whose
+`bool` return — `false` when the scheduler's 32-slot queue is full, see §3 —
+was never checked at either call site. If `AddAction` silently failed, the
+corresponding `CheckAction` never fired, and the state machine would sit
+indefinitely with no automatic recovery — only a ground-issued
+`CANCELMEASURE` (TC 156) could get it out.
 
-**Likelihood.** Low — requires ~32 other actions already queued at the moment
-the docked profile starts. Same underlying cause as §3 (the scheduler queue is
-unbounded-appending and never dedupes); the proper fix proposed there
-(`AddAction` dedupe) would close this gap too, as would simply checking
-`AddAction`'s return value here and treating a full queue as a bail-out
-condition (e.g. WARN + `return true`).
+**Fix (periodic-offload rebuild).** `Flight_DockedProfile` no longer calls
+`scheduler.AddAction` anywhere — all its timing is local `millis()` deadlines,
+which have no failure mode tied to queue occupancy. This closes the gap
+outright for this file, independent of whether the general `AddAction` dedupe
+fix (§3) ever lands. See §13a for the related reentrancy fix from the same
+rebuild.
 
 ---
 
@@ -709,27 +758,68 @@ the StratoCore source of truth, not just this repo's vendored copy.
 
 ---
 
-## 17. `Flight_DockedProfile`'s end-of-profile go-standby is fire-and-forget — **OPEN**
+## 17. `Flight_DockedProfile`'s end-of-profile go-standby is fire-and-forget — **RESOLVED**
 
-`ST_MEASURE_WAIT`'s completion path (`Flight_DockedProfile.cpp:70-76`) calls
-`puComm.TX_GoStandby(...)` and immediately proceeds to
+**Original symptom.** `ST_MEASURE_WAIT`'s completion path called
+`puComm.TX_GoStandby(...)` and immediately proceeded to
 `SetAction(ACTION_OFFLOAD_PU)` with no ACK check and no resend armed — unlike
-`ST_GO_MEASURE`/`ST_CONFIRM_GO_MEASURE`, which retry once via
-`RESEND_PU_GOPROFILE` before giving up. `PURouter::HandlePUAck()` already has
-a `case RPU_GO_STANDBY:` handler (`PURouter.cpp:56-62`) that logs the ACK/NAK
-but sets no flag, so there is no signal `Flight_DockedProfile` could even
-check today. Combined with the SerialComm "no transport ack/nak" weakness
-(§2), a single lost/garbled go-standby frame goes completely unnoticed —
-confirmed on 2026-08-12 (see §13a): during the premature-completion episode
-there, the RPU never received the go-standby command and kept measuring,
-unaware it had been told to stop, until its own onboard timer correctly ended
-the measurement 3 m 36 s later.
+`ST_GO_MEASURE`/`ST_CONFIRM_GO_MEASURE`, which retried once via
+`RESEND_PU_GOPROFILE` before giving up. `PURouter::HandlePUAck()` had a `case
+RPU_GO_STANDBY:` handler that logged the ACK/NAK but set no flag, so there was
+no signal `Flight_DockedProfile` could even check. Combined with the
+SerialComm "no transport ack/nak" weakness (§2), a single lost/garbled
+go-standby frame went completely unnoticed — confirmed on 2026-08-12 (see
+§13a): during the premature-completion episode there, the RPU never received
+the go-standby command and kept measuring, unaware it had been told to stop,
+until its own onboard timer correctly ended the measurement 3 m 36 s later.
 
-**Proposed fix.** Add a `pu_standby` flag set in `HandlePUAck()`'s
-`RPU_GO_STANDBY` case (mirroring `pu_measure` in the `RPU_GO_MEASURE` case),
-and give the end-of-profile path the same confirm/resend state used for
-go-measure (`ST_CONFIRM_GO_MEASURE`'s `resend_attempted` pattern), bounded so
-it can't hang forever.
+**Fix (periodic-offload rebuild).** `HandlePUAck()`'s `RPU_GO_STANDBY` case now
+sets a new `pu_standby` flag on ack (and clears it on the `RPU_GO_MEASURE`
+case, and vice versa, so the two edge-triggered flags can't cross-contaminate
+between periods). Every standby transition in `Flight_DockedProfile` — end of
+a measurement period, not just end of profile, now that offloads happen
+periodically — goes through a dedicated `ST_CONFIRM_STANDBY` state using the
+same retry pattern as go-measure: one retry on `RPU_RECEIVE_TIMEOUT`, then a
+second unacknowledged attempt aborts the whole docked profile immediately with
+one WARN, regardless of whether it's a mid-profile period boundary or the
+final one. (An earlier version of this fix let a mid-profile failure "proceed
+into the offload anyway," reasoning the RPU accepts `RPU_SEND_RECORDS` from
+any state — bench evidence showed that costs ~42 s and 4 WARN TMs to reach the
+same eventual failure that aborting reaches in ~12 s with one message, since
+an unresponsive RPU means the offload cannot succeed either way; simplified to
+abort unconditionally.) See the design doc for the full state table.
+
+---
+
+## 18. DOCKEDPROFILE (TC 153) allowed an unbounded duration — a dev-only semantic leaked onto a flight command — **FIXED**
+
+**Symptom.** `docked_profile_time == 0` meant "run until commanded to STANDBY" — a docked profile could
+be started with no time limit at all, relying entirely on the operator remembering to send TC 156
+(`CANCELMEASURE`).
+
+**Root cause: a validation pattern mirrored from a dev-only command onto a real flight command, without
+re-examining whether it belonged there.** The `duration != 0 && duration <= rate` special-case originates
+in `RPUGOMEASURE` (TC 185, `StrateoleXML` `Telecommand.h`), which is explicitly marked *"Development
+testing only — not used in flight operations"*, added 2026-06-15. When `DOCKEDPROFILE` (TC 153) gained
+its own `rate` parameter on 2026-08-08, the commit description says it "mirrors RPUGOMEASURE's existing
+pattern... including the same validation" — the `duration == 0` special case came along with it. That was
+never a deliberate decision that a docked profile should be unboundable; it was inherited by copying a
+validation pattern for consistency. A later fix session found `duration == 0` was additionally *buggy* —
+ending the profile after ~2 s instead of actually running indefinitely as the (now-corrected)
+`TelecommandCribSheet.md` documented — and fixed it to work as documented, which is what surfaced the
+question of whether "indefinite" should exist here at all.
+
+**Fix.** `StrateoleXML` `Telecommand.cpp`'s `DOCKEDPROFILE` case (`03fab5d`) now rejects
+`dockedProfileTime == 0` unconditionally — `duration` must always be nonzero and greater than `rate`.
+`Flight_DockedProfile.cpp` gained a matching `ST_ENTRY` guard (defense-in-depth, in case
+`docked_profile_time` is ever set some other way) and the `indefinite` code path was removed entirely:
+`NextPeriodLength` no longer takes an `indef` parameter, `ST_MEASURE_WAIT`'s remaining-time logic no
+longer branches on it, the periodic-offload block-count guard (§3) no longer needs an unboundable-case
+carve-out, and the RPU-FIFO-overflow risk that combination could cause is now structurally impossible.
+See [the design doc](DockedProfilePeriodicOffload.md) for the full before/after.
+
+**`RPUGOMEASURE` itself is unaffected** — it's still dev-only and `duration == 0` still means
+"unlimited" there, which is fine for its intended use.
 
 ---
 
@@ -745,7 +835,7 @@ StateMess2/3 are empty (omitted from the XML).
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
 | `RACHUTSREPORT` | `SendRACHUTSREPORT(rpu_block, source)` — sole caller is `SendPeriodicRACHUTSREPORT()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"rachuts":{"epoch","mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. `epoch` is the PIB system time (Unix seconds via `now()`, like RATSREPORT's header epoch; unset until the RTC is set from GPS). The `rachuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
-| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented on go-measure send — not part of the RPU record itself) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 7692 B/block. |
+| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> period:<docked_period_num> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented once per docked profile — not per period — not part of the RPU record itself; `docked_period_num` counts measure-then-offload periods within one docked profile, 0 for a standalone TC 147 offload, so `(profile_id, docked_period_num, packet_num)` stays unique across a multi-period profile) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 7692 B/block. |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |

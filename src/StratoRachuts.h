@@ -32,13 +32,34 @@
 #define FLAG_STALE      3
 
 #define MCB_RESEND_TIMEOUT      10
-#define PU_RESEND_TIMEOUT       10
+// How long to wait for an RPU reply before retrying a dock command. Observed
+// RPU turnaround on the bench: ~0.6 s for a status reply, ~1.1 s for a
+// go-measure/go-standby ack, ~1.9 s for the largest (7692 B) record block --
+// so 6 s leaves roughly 3x margin on the slowest case while cutting the
+// dead time on an unresponsive RPU from 20 s to 12 s per two-attempt sequence.
+#define RPU_RECEIVE_TIMEOUT     6
 #define ZEPHYR_RESEND_TIMEOUT   60
 
 #define RETRY_DOCK_LENGTH   2.0f
 
 #define MCB_BUFFER_SIZE     MAX_MCB_BINARY
 #define PU_BUFFER_SIZE      8192
+
+// Duplicates the RPU-side constant (RPU/src/RPU/RPU.cpp) -- records per TM block
+// during a profile offload. Used only to bound the docked-profile ST_ENTRY guard
+// below; if the RPU-side value ever changes this should be updated to match.
+#define RPU_TM_MAX_RECORDS      160
+
+// Max RPUREPORT TMs (record blocks) any single docked-profile period's offload
+// may need -- a per-period limit, not a whole-profile total; each period can
+// produce up to this many. Enforced by the ST_ENTRY block-count guard, as a
+// safety margin under MAX_SCHEDULE_SIZE (StratoScheduler.h, 32):
+// Flight_PUOffload arms one RESEND_TM (and briefly one RESEND_PU_RECORD) per
+// segment without cancelling the prior one, so a single offload needing
+// too many blocks can fill the scheduler queue. 3/4 of the queue leaves
+// headroom for RESEND_PU_RECORD's smaller concurrent stack and anything else
+// already queued when the profile starts.
+#define MAX_DOCKED_PERIOD_TMS   (MAX_SCHEDULE_SIZE * 3 / 4)
 
 //LoRa Settings
 #define FREQUENCY 868E6
@@ -250,11 +271,46 @@ private:
 
 
     // flags for PU state tracking
+    // Set in PURouter (HandlePUBin, RPU_PROFILE_RECORD) when a record block
+    // arrives; consumed by Flight_PUOffload. Shared by both offload callers
+    // (TC 147 manual and the docked profile's nested offload) -- not docked-
+    // profile-specific.
     bool record_received = false;
+    // Set in PURouter (HandlePUASCII, RPU_NO_MORE_RECORDS) when the RPU signals
+    // an offload is complete; consumed by Flight_PUOffload to end the pull.
+    // Same as record_received -- shared, not docked-profile-specific.
     bool pu_no_more_records = false;
+    // Set in PURouter (HandlePUAck, RPU_GO_MEASURE ack), cleared on a
+    // RPU_GO_STANDBY ack. Consumed by both Flight_Profile (manual profile) and
+    // Flight_DockedProfile -- not docked-profile-specific.
     bool pu_measure = false;
+    // Set in PURouter (HandlePUAck, RPU_GO_STANDBY ack), cleared on a
+    // RPU_GO_MEASURE ack. Set on every go-standby ack regardless of source
+    // (TC 156, TC 184, the docked profile's own standby commands), but
+    // currently only ever read by Flight_DockedProfile (ST_CONFIRM_STANDBY) --
+    // docked-profile-specific in practice, though not by construction.
+    bool pu_standby = false;
+    // Unused -- no reads or writes anywhere in src/. Dead.
     bool pu_preprofile = false;
+    // Set in Flight_CheckPU on a successful RPU status request; consumed by
+    // Flight.cpp's FLM_CHECK_PU (manual TC 143 check-PU flow) to decide whether
+    // to force an immediate status report. Not docked-profile-specific; not
+    // read by Flight_PUOffload's own nested Flight_CheckPU call either (that
+    // call site uses Flight_CheckPU's return value directly, ignoring this
+    // flag).
     bool check_pu_success = false;
+    // Set in Flight_PUOffload on all three of its exit paths (success, PU
+    // failure, unknown state). Set regardless of caller, but currently only
+    // read by Flight_DockedProfile (ST_OFFLOAD) -- the manual TC 147 offload
+    // path (Flight.cpp, FLM_PU_OFFLOAD) doesn't check it. Docked-profile-
+    // specific in practice, though not by construction.
+    bool pu_offload_success = false;
+
+    // Index of the current docked-profile period (measure-then-offload cycle)
+    // within one docked profile, for SendRPUREPORT; 0 for a standalone (TC 147)
+    // offload. A count/index, not a duration -- docked_offload_period is the
+    // configured period length in seconds.
+    uint8_t docked_period_num = 0;
 
     // uint32_t start time of the current profile in millis
     uint32_t profile_start = 0;

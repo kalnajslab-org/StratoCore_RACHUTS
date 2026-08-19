@@ -472,8 +472,8 @@ void StratoRachuts::SendRPUREPORT(uint8_t packet_num)
 
     zephyrTX.setStateDetails(1, "RPUREPORT");
 
-    snprintf(log_array, LOG_ARRAY_SIZE, "profile:%u packet:%u records: %u", 
-        pibConfigs.profile_id.Read(), packet_num, num_records);
+    snprintf(log_array, LOG_ARRAY_SIZE, "profile:%u period:%u packet:%u records: %u",
+        pibConfigs.profile_id.Read(), docked_period_num, packet_num, num_records);
     zephyrTX.setStateDetails(2, log_array);
 
     if (0 < snprintf(log_array, LOG_ARRAY_SIZE, "%lu, %0.4f, %0.4f, %0.1f", 

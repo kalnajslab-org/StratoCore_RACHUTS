@@ -64,6 +64,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 154 | STARTREALTIMEMCB | Enable real-time MCB data streaming | — |
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
 | 156 | CANCELMEASURE | Cancel an in-progress docked profile (sends RPU to standby, offloads what was collected) | — |
+| 157 | SETDOCKEDOFFLOADPERIOD | Set the docked profile's periodic offload interval (EEPROM-persisted) | period (uint16, s); 0 = offload once at the end (legacy) |
 
 ## RPU (Profiler) dock control
 
@@ -80,14 +81,19 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 185 | RPUGOMEASURE | Command RPU to MEASURE | duration (s), rate (s) |
 
 Notes:
-- **RPUCONFIG / RPUGOMEASURE / DOCKEDPROFILE validation:** `rate` must be > 0;
-  a nonzero `duration` must be greater than `rate` (else the TC is NAK'd).
-  `duration = 0` means "run until commanded to STANDBY / record buffer full."
-- **TC 185 (RPUGOMEASURE)** now carries `duration`/`rate` directly; battery
+- **RPUCONFIG / RPUGOMEASURE validation:** `rate` must be > 0; a nonzero
+  `duration` must be greater than `rate` (else the TC is NAK'd). `duration = 0`
+  means "run until commanded to STANDBY / record buffer full." Note TC 185
+  (RPUGOMEASURE) is dev-testing only, not used in flight operations.
+- **DOCKEDPROFILE validation is stricter:** `rate` must be > 0, and `duration`
+  must always be nonzero **and** greater than `rate` (else the TC is NAK'd) --
+  a docked profile must never be unbounded, unlike RPUGOMEASURE.
+- **TC 185 (RPUGOMEASURE)** carries `duration`/`rate` directly; battery
   setpoint and sensor-enable flags come from the stored RPUCONFIG.
 - **TC 153 (DOCKEDPROFILE)** likewise carries `duration`/`rate` directly
   (not persisted to EEPROM); sensor-enable flags and battery setpoint still
-  come from the stored RPUCONFIG.
+  come from the stored RPUCONFIG. The periodic-offload interval comes from
+  TC 157 (`SETDOCKEDOFFLOADPERIOD`, EEPROM-persisted), not from this TC.
 
 ## Diagnostics / EEPROM
 
