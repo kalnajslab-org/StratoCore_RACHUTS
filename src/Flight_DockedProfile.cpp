@@ -204,6 +204,12 @@ bool StratoRachuts::Flight_DockedProfile(bool restart_state)
         break;
 
     case ST_OFFLOAD:
+        // ST_TM_ACK's uncapped TM resend looks unbounded, but it isn't: the
+        // RESEND_TM scheduler timeout always eventually fires and forces
+        // ST_TM_ACK onward regardless of ACK status, and pu_no_more_records
+        // (checked independent of TM-ack history) terminates the offload once
+        // the RPU's finite record supply runs out. Flight_PUOffload() always
+        // eventually returns true.
         if (!Flight_PUOffload(false)) break;
         if (!pu_offload_success) {
             SendTextTM("Docked profile aborted: RPU offload failed, returning to FLM_IDLE", WARN);
