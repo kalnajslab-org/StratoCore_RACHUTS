@@ -227,10 +227,6 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         pibConfigs.preprofile_time.Write(pibParam.preprofileTime);
         msg2 = "Set preprofile_time: " + String(pibConfigs.preprofile_time.Read());
         break;
-    case SETPUWARMUPTIME:
-        pibConfigs.puwarmup_time.Write(pibParam.warmupTime);
-        msg2 = "Set puwarmup_time: " + String(pibConfigs.puwarmup_time.Read());
-        break;
     case AUTOREDOCKPARAMS:
         pibConfigs.redock_out.Write(pibParam.autoRedockOut);
         pibConfigs.redock_in.Write(pibParam.autoRedockIn);

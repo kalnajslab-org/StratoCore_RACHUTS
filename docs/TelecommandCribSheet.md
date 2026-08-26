@@ -57,7 +57,6 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 146 | MANUALPROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s), RPU sample rate (s) |
 | 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**flight only**) | — |
 | 148 | SETPREPROFILETIME | Pre-profile wait after RPU enters measure | time (uint16, s) |
-| 149 | SETPUWARMUPTIME | PU warmup time | time (uint16, s) |
 | 150 | AUTOREDOCKPARAMS | Auto-redock parameters | redock out (rev), redock in (rev), max retries |
 | 151 | SETMOTIONTIMEOUT | Motion timeout | timeout (uint16, s) |
 | 153 | DOCKEDPROFILE | Execute a docked profile (**flight only**) | duration (s), rate (s) |

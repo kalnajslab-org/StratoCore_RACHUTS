@@ -54,7 +54,6 @@ public:
     // profile timing (seconds)
     EEPROMData<uint16_t> dwell_time;
     EEPROMData<uint16_t> preprofile_time;
-    EEPROMData<uint16_t> puwarmup_time;
     EEPROMData<uint16_t> motion_timeout;
 
     EEPROMData<uint8_t> num_redock;   // before erroring out

@@ -29,7 +29,6 @@ PIBConfigs::PIBConfigs()
     , rpu_enable_TDLAS(1)
     , dwell_time(900)
     , preprofile_time(180)
-    , puwarmup_time(900)
     , motion_timeout(30)
     , num_redock(3)
     , pu_docked(false)
@@ -63,7 +62,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&rpu_enable_TDLAS);
     success &= Register(&dwell_time);
     success &= Register(&preprofile_time);
-    success &= Register(&puwarmup_time);
     success &= Register(&motion_timeout);
     success &= Register(&num_redock);
     success &= Register(&pu_docked);
