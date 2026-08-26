@@ -200,8 +200,22 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
         pibConfigs.dwell_time.Write(pibParam.dwellTime);
-        msg2 += ": size=" + String(pibParam.profileSize, 1) + " revs, dock=" + String(pibParam.dockAmount, 1)
-              + " revs, overshoot=" + String(pibParam.dockOvershoot, 1) + " revs, dwell=" + String(pibParam.dwellTime) + "s";
+        pibConfigs.rpu_meas_rate.Write(pibParam.sampleRate);
+        {
+            // Same lengths Flight_Profile's ST_SET_PU_PROFILE will derive from
+            // these same EEPROM fields, so this estimate matches what
+            // PUStartProfile() actually commands the RPU to run for.
+            float est_deploy_len = pibParam.profileSize;
+            float est_retract_len = pibParam.profileSize - pibParam.dockAmount;
+            float est_dock_len = pibParam.dockAmount + pibParam.dockOvershoot;
+            uint32_t est_duration = CalcManualProfileDuration(est_deploy_len, est_retract_len, est_dock_len);
+            // Kept short: StateMess fields are silently truncated at 100 chars
+            // by the shared XMLWriter (writeAndUpdateCRC's const char* loop).
+            msg2 += ": size=" + String(pibParam.profileSize, 1) + " dock=" + String(pibParam.dockAmount, 1)
+                  + " over=" + String(pibParam.dockOvershoot, 1) + " dwell=" + String(pibParam.dwellTime) + "s"
+                  + " rate=" + String(pibConfigs.rpu_meas_rate.Read()) + "s"
+                  + " time=" + String(est_duration) + "s";
+        }
         SetAction(COMMAND_MANUAL_PROFILE);
         break;
     case OFFLOADPUPROFILE:
@@ -301,15 +315,11 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         puComm.TX_ASCII(RPU_RESET);
         break;
     case RPUCONFIG:
-        pibConfigs.rpu_meas_duration.Write(rpuParam.measDurationSecs);
-        pibConfigs.rpu_meas_rate.Write(rpuParam.measRateSecs);
         pibConfigs.rpu_enable_ROPC.Write(rpuParam.enableROPC);
         pibConfigs.rpu_enable_TDLAS.Write(rpuParam.enableTDLAS);
         pibConfigs.rpu_enable_TSEN.Write(rpuParam.enableTSEN);
         pibConfigs.rpu_enable_RS41.Write(rpuParam.enableRS41);
-        msg2 = "RPU config: duration=" + String(pibConfigs.rpu_meas_duration.Read())
-             + " rate=" + String(pibConfigs.rpu_meas_rate.Read())
-             + " ROPC=" + String(pibConfigs.rpu_enable_ROPC.Read())
+        msg2 = "RPU config: ROPC=" + String(pibConfigs.rpu_enable_ROPC.Read())
              + " TDLAS=" + String(pibConfigs.rpu_enable_TDLAS.Read())
              + " TSEN=" + String(pibConfigs.rpu_enable_TSEN.Read())
              + " RS41=" + String(pibConfigs.rpu_enable_RS41.Read());

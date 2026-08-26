@@ -3,7 +3,7 @@
 Quick reference for the telecommands RACHUTS (PIB) accepts. Numbers are the TC
 id. "Params" lists the ordered parameters the command expects; commands with no
 Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
-`src/TCHandler.cpp` (handlers). Last updated 2026-06-15.
+`src/TCHandler.cpp` (handlers). Last updated 2026-08-25.
 
 > Only the commands below are handled by RACHUTS. TC ranges for other
 > instruments — **50–57** (FTR/DIB), **60–76** (RATS/ECU), **100–119** (PHA) —
@@ -54,7 +54,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
 | 142 | RETRYDOCK | Manual redock (**flight only**) | deploy len (rev), retract len (rev) |
-| 146 | MANUALPROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s) |
+| 146 | MANUALPROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s), RPU sample rate (s) |
 | 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**flight only**) | — |
 | 148 | SETPREPROFILETIME | Pre-profile wait after RPU enters measure | time (uint16, s) |
 | 149 | SETPUWARMUPTIME | PU warmup time | time (uint16, s) |
@@ -73,7 +73,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 143 | GETPUSTATUS | Request RPU status over dock (**flight only**) → RACHUTSREPORT TM | — |
 | 144 | PUPOWERON | Enable RPU dock power | — |
 | 145 | PUPOWEROFF | Disable RPU dock power | — |
-| 180 | RPUCONFIG | Configure RPU measurement (stored) | duration (s), rate (s), ROPC, TDLAS, TSEN, RS41 |
+| 180 | RPUCONFIG | Configure RPU sensor enables (stored) | ROPC, TDLAS, TSEN, RS41 |
 | 181 | RPUSTATUSPERIOD | RPU status report period | period (uint16, s) |
 | 182 | RPUBATTEMP | RPU battery temperature threshold | temp (float, °C) |
 | 183 | RPURESET | Reboot the RPU via dock serial | — |
@@ -81,10 +81,10 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 185 | RPUGOMEASURE | Command RPU to MEASURE | duration (s), rate (s) |
 
 Notes:
-- **RPUCONFIG / RPUGOMEASURE validation:** `rate` must be > 0; a nonzero
-  `duration` must be greater than `rate` (else the TC is NAK'd). `duration = 0`
-  means "run until commanded to STANDBY / record buffer full." Note TC 185
-  (RPUGOMEASURE) is dev-testing only, not used in flight operations.
+- **RPUGOMEASURE validation:** `rate` must be > 0; a nonzero `duration` must
+  be greater than `rate` (else the TC is NAK'd). `duration = 0` means "run
+  until commanded to STANDBY / record buffer full." TC 185 is dev-testing
+  only, not used in flight operations.
 - **DOCKEDPROFILE validation is stricter:** `rate` must be > 0, and `duration`
   must always be nonzero **and** greater than `rate` (else the TC is NAK'd) --
   a docked profile must never be unbounded, unlike RPUGOMEASURE.
@@ -94,6 +94,22 @@ Notes:
   (not persisted to EEPROM); sensor-enable flags and battery setpoint still
   come from the stored RPUCONFIG. The periodic-offload interval comes from
   TC 157 (`SETDOCKEDOFFLOADPERIOD`, EEPROM-persisted), not from this TC.
+- **TC 146 (MANUALPROFILE)** does not take a duration: `CalcManualProfileDuration()`
+  auto-calculates the RPU measurement duration from the profile's own motion
+  parameters (deploy/retract/dock length and velocity, `preprofile_time`
+  margin before motion, `motion_timeout` margin after, plus `dwell_time`), so
+  the RPU keeps sampling for the whole deploy+dwell+retract+dock sequence
+  regardless of how long it actually takes. The TC ack reports this estimate
+  (`dur=...s`) at receipt time, before the profile actually starts;
+  `PUStartProfile()` recomputes the same value (same helper, same inputs)
+  when it actually commands the RPU. Sample rate *is* a param (param4) and is
+  persisted to `rpu_meas_rate` (the same EEPROM field RPUCONFIG used to
+  write, before duration/rate were removed from it). The ack message uses
+  short field labels (`sz`/`dk`/`ov`/`dw`/`rt`/`dur`) because TM `StateMess`
+  fields are silently truncated at 100 characters by the shared XMLWriter
+  (`writeAndUpdateCRC`'s `const char*` overload loops to a hard 100, not the
+  string's actual length) -- a pre-existing StrateoleXML limitation, not
+  fixed here.
 
 ## Diagnostics / EEPROM
 
@@ -119,13 +135,13 @@ Notes:
   - `143` GETPUSTATUS *(no params)* → RACHUTSREPORT TM.
 - **Bench RPU measure + offload:**
   - `181` RPUSTATUSPERIOD(period s) — set how often the RPU reports status
-  - `180` RPUCONFIG(duration s, rate s, ROPC 0/1, TDLAS 0/1, TSEN 0/1, RS41 0/1)
+  - `180` RPUCONFIG(ROPC 0/1, TDLAS 0/1, TSEN 0/1, RS41 0/1)
   - `185` RPUGOMEASURE(duration s, rate s)
   - *wait for the measurement*
   - `184` RPUGOSTANDBY *(no params)*
   - `147` OFFLOADPUPROFILE *(no params)* → RPUREPORT TMs.
 - **Manual profile:**
-  - `146` MANUALPROFILE(profile size rev, dock amount rev, dock overshoot rev, dwell s)
+  - `146` MANUALPROFILE(profile size rev, dock amount rev, dock overshoot rev, dwell s, RPU sample rate s)
 - **Dump configs:**
   - `18` GETMCBEEPROM *(no params)*
   - `152` GETPIBEEPROM *(no params)*

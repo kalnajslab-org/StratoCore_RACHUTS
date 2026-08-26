@@ -514,12 +514,23 @@ void StratoRachuts::PUStartProfile()
     profile_start_altitude = zephyrRX.zephyr_gps.altitude;
 
     // Enable RPU MEASURE mode with the configured measurement parameters
-    puComm.TX_GoMeasure(pibConfigs.rpu_meas_duration.Read(), pibConfigs.rpu_meas_rate.Read(),
+    uint32_t meas_duration = CalcManualProfileDuration(deploy_length, retract_length, dock_length);
+    puComm.TX_GoMeasure(meas_duration, pibConfigs.rpu_meas_rate.Read(),
                         pibConfigs.rpu_bat_temp.Read(),
                         pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
                         pibConfigs.rpu_enable_TSEN.Read(), pibConfigs.rpu_enable_RS41.Read());
 
     pibConfigs.profile_id.Write(pibConfigs.profile_id.Read() + 1);
+}
+
+// Total time the RPU should keep sampling to span deploy + dwell + retract/dock,
+// so it doesn't stop early regardless of how long the actual motion takes.
+uint32_t StratoRachuts::CalcManualProfileDuration(float deploy_len, float retract_len, float dock_len)
+{
+    uint32_t t_down = 60 * (deploy_len / pibConfigs.deploy_velocity.Read()) + pibConfigs.preprofile_time.Read();
+    uint32_t t_up = 60 * (retract_len / pibConfigs.retract_velocity.Read() + dock_len / pibConfigs.dock_velocity.Read())
+                   + pibConfigs.motion_timeout.Read();
+    return t_down + pibConfigs.dwell_time.Read() + t_up;
 }
 
 void StratoRachuts::ReadAnalog()

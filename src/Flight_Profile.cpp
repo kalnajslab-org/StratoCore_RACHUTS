@@ -25,11 +25,15 @@ enum ProfileStates_t {
     ST_VERIFY_MOTION,
     ST_MONITOR_MOTION,
     ST_CONFIRM_MCB_LP,
+    ST_GO_STANDBY,
+    ST_CONFIRM_STANDBY,
+    ST_OFFLOAD,
 };
 
 static ProfileStates_t profile_state = ST_ENTRY;
 static bool resend_attempted = false;
 static uint8_t redock_count = 0;
+static uint32_t pu_reply_deadline_ms = 0;
 
 bool StratoRachuts::Flight_Profile(bool restart_state)
 {
@@ -262,7 +266,8 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
         if (mcb_low_power) { // set in MCBRouter when MCB acks MCB_GO_LOW_POWER
             log_nominal("Profile finished, MCB in low power");
             mcb_low_power = false;
-            return true;
+            resend_attempted = false;
+            profile_state = ST_GO_STANDBY;
         } else if (CheckAction(RESEND_MCB_LP)) {
             if (!resend_attempted) {
                 resend_attempted = true;
@@ -274,6 +279,49 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
             }
         }
         break;
+
+    // Motion is done; the RPU has been recording since PUStartProfile() and
+    // that data is still sitting in its buffer, so offload it automatically
+    // instead of requiring a separate manual TC 147. Same standby+offload
+    // sequence Flight_DockedProfile uses at its period boundaries.
+    case ST_GO_STANDBY:
+        if (!resend_attempted) {
+            SendTextTM("Profile motion complete; commanding RPU to standby for offload", FINE);
+        }
+        pu_standby = false;
+        puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read());
+        pu_reply_deadline_ms = millis() + (RPU_RECEIVE_TIMEOUT * 1000UL);
+        profile_state = ST_CONFIRM_STANDBY;
+        break;
+
+    case ST_CONFIRM_STANDBY:
+        if (pu_standby) {
+            resend_attempted = false;
+            docked_period_num = 0; // not a docked-profile offload
+            Flight_PUOffload(true);
+            profile_state = ST_OFFLOAD;
+        } else if ((int32_t) (millis() - pu_reply_deadline_ms) >= 0) {
+            if (!resend_attempted) {
+                resend_attempted = true;
+                profile_state = ST_GO_STANDBY;
+            } else {
+                resend_attempted = false;
+                SendTextTM("RPU did not confirm standby; profile offload skipped, returning to FLM_IDLE", WARN);
+                return true;
+            }
+        }
+        break;
+
+    case ST_OFFLOAD:
+        // See Flight_DockedProfile's ST_OFFLOAD: Flight_PUOffload() always
+        // eventually returns true, it does not hang.
+        if (!Flight_PUOffload(false)) break;
+        if (!pu_offload_success) {
+            SendTextTM("Profile offload failed, returning to FLM_IDLE", WARN);
+            return true;
+        }
+        SendTextTM("Profile and offload complete, returning to FLM_IDLE", FINE);
+        return true;
 
     default:
         // unknown state, exit

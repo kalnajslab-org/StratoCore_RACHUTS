@@ -251,6 +251,13 @@ private:
     // PU start profile command generation and transmit
     void PUStartProfile();
 
+    // Auto-calculated total RPU measurement duration for a manual profile:
+    // deploy time + dwell + retract/dock time, with margin for the
+    // pre-profile wait and motion timeout. Shared by PUStartProfile() (which
+    // uses it to command the RPU) and the MANUALPROFILE TC ack (which reports
+    // it before the profile actually starts).
+    uint32_t CalcManualProfileDuration(float deploy_len, float retract_len, float dock_len);
+
     // Read the analog channels on the PIB
     void ReadAnalog();
 

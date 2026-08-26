@@ -22,7 +22,6 @@ PIBConfigs::PIBConfigs()
     , dock_velocity(80.0f)
     , rpu_bat_temp(20.0f)
     , rpu_status_rate(1800)
-    , rpu_meas_duration(90*60)
     , rpu_meas_rate(1)
     , rpu_enable_TSEN(1)
     , rpu_enable_ROPC(1)
@@ -57,7 +56,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&dock_velocity);
     success &= Register(&rpu_bat_temp);
     success &= Register(&rpu_status_rate);
-    success &= Register(&rpu_meas_duration);
     success &= Register(&rpu_meas_rate);
     success &= Register(&rpu_enable_TSEN);
     success &= Register(&rpu_enable_ROPC);
