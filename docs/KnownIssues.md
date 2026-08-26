@@ -3,7 +3,7 @@
 A running record of bugs, design weaknesses, and hardware quirks in the
 RACHUTS PIB firmware and the RPU (Profiler Unit) firmware, with root causes and
 status. Spans two repos: `StratoCore_RACHUTS` (PIB, the dock master) and `RPU`
-(the profiler, the dock slave). Last updated 2026-08-19.
+(the profiler, the dock slave). Last updated 2026-08-26.
 
 Status legend: **FIXED** · **MITIGATED** (worked around, root cause remains) ·
 **OPEN** (identified, not yet addressed).
@@ -294,18 +294,27 @@ which RATS lacks).
 
 ---
 
-## 5. RPU measurement cadence and unused parameters — **OPEN**
+## 5. RPU measurement cadence and unused `RPU_GO_MEASURE` parameters — **FIXED**
 
-- **Sample cadence drifts to ~1.04 s/record** instead of 1.0 s. `tickMeasure`
-  uses `if (tick_timer < 1000) return; tick_timer = 0;` — resetting to 0
-  discards the per-loop overshoot, so the period locks in at ~1.04 s and
-  accumulates (120 records span ~125 s). `elapsed_s` (set from
-  `(millis() - MeasureStartMillis)/1000`) honestly reports the drifted times, so
-  this is **not** record loss. Fix: `tick_timer -= 1000;` to preserve phase.
-- **`MeasureRate` is ignored.** Received in `RPU_GO_MEASURE` but `tickMeasure`
-  hard-codes 1000 ms.
-- **`MeasureDuration` is ignored.** The RPU never auto-returns to STANDBY; it
-  runs MEASURE until commanded.
+All three sub-issues below are resolved in the current `RPU.cpp`. ("MeasureRate"/
+"MeasureDuration" were never distinct variable names in code — they're the
+`rate`/`duration` fields of the `RPU_GO_MEASURE` command
+(`RPUComm::RX_GoMeasure(int32_t *duration, int32_t *rate, ...)`); this section's
+title is descriptive, not a reference to now-dead identifiers.)
+
+- **Sample cadence drift.** `tickMeasure()` now does
+  `measure_timer = measure_timer % 1000;` instead of resetting to 0, preserving
+  the per-loop overshoot so the 1 Hz sensor-sampling tick no longer accumulates
+  drift.
+- **`rate` was ignored.** Now captured into `SaveRateSecs` on `RPU_GO_MEASURE`
+  (`RPU.cpp:207,218`), which gates the record-save cadence (`save_interval_ms`,
+  `RPU.cpp:398`) independently of the 1 Hz sensor-sampling loop.
+- **`duration` was ignored.** Now captured into `MeasureDurationSecs` and
+  enforced (`RPU.cpp:456-459`): once it elapses since `MeasureStartMillis`,
+  `tickMeasure()` calls `enterStandby()` automatically. `0` still means
+  unlimited (unchanged dev/flight semantics, consistent with §18's note that
+  `RPUGOMEASURE` is dev-only and keeps its `duration == 0` = unlimited
+  behavior).
 
 ---
 
@@ -386,16 +395,20 @@ future comms symptom.
 
 ---
 
-## 10. Minor / latent (RPU) — **OPEN**
+## 10. Minor / latent (RPU) — **RESOLVED**
 
-- **OPC parser** logs `"OPC parse error: too many fields"` intermittently —
-  memory-safe (no overflow), but indicates OPC serial line-framing trouble
-  (merged/partial lines). On failure `readOPC` returns the previous (stale) OPC
-  values into the record (`gotOPC` is computed but unused), and the `static
-  String buf` it accumulates into can grow unbounded if a newline never arrives.
+- **OPC parser** logs `"OPC parse error: too many fields"` — **expected,
+  not a bug.** This fires on the OPC's header line, printed once when the
+  sensor is first powered on, which has a different field count than a normal
+  data line and is correctly rejected by `parseOPCString`. Properly handled:
+  on failure `readOPC` returns false and leaves the previous (stale) OPC
+  values in the record for that one tick, and `buf` is reset (`RPUOPC.cpp:62`)
+  so it doesn't accumulate across calls.
 - **`RPURecord` JSON debug print** is gated behind the `d` console command
   (default off) to avoid per-tick USB blocking and `String` heap churn; the
   console status print interval defaults to 0 (off), settable with `c <s>`.
+  Only manifests during development testing (console debug print is off by
+  default in flight) — low priority, won't be fixed.
 
 ---
 
