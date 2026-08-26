@@ -33,8 +33,6 @@ PIBConfigs::PIBConfigs()
     , num_redock(3)
     , pu_docked(false)
     , real_time_mcb(false)
-    , lora_tx_tm(false)
-    , lora_tx_status(1800)
     , profile_id(1)
     , ra_override(false)
     , docked_offload_period(30*60)
@@ -66,8 +64,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&num_redock);
     success &= Register(&pu_docked);
     success &= Register(&real_time_mcb);
-    success &= Register(&lora_tx_tm);
-    success &= Register(&lora_tx_status);
     success &= Register(&profile_id);
     success &= Register(&ra_override);
     success &= Register(&docked_offload_period);
