@@ -40,6 +40,12 @@
 #define RPU_RECEIVE_TIMEOUT     6
 #define ZEPHYR_RESEND_TIMEOUT   60
 
+// How many times to NAK-and-repull a profile record whose checksum fails
+// before giving up and forwarding the (possibly corrupted) block to ground
+// anyway. See KnownIssues.md #1 -- the checksum-failure root cause (a
+// ReadChecksum() race) is fixed, so a repull is now likely to succeed.
+#define MAX_CRC_RETRIES         2
+
 #define RETRY_DOCK_LENGTH   2.0f
 
 #define MCB_BUFFER_SIZE     MAX_MCB_BINARY
@@ -283,6 +289,17 @@ private:
     // (TC 147 manual and the docked profile's nested offload) -- not docked-
     // profile-specific.
     bool record_received = false;
+    // Set in PURouter (HandlePUBin, RPU_PROFILE_RECORD) when a record block's
+    // checksum fails but the retry budget (MAX_CRC_RETRIES, tracked by
+    // crc_retry_count) isn't exhausted yet -- PURouter has already NAK'd it.
+    // Consumed by Flight_PUOffload to immediately re-pull (skip waiting out
+    // RESEND_PU_RECORD's timeout) rather than treating it as no response at
+    // all. Shared by both offload callers, not docked-profile-specific.
+    bool record_needs_retry = false;
+    // Consecutive checksum failures on the current record block, owned by
+    // PURouter (HandlePUBin); reset on any non-retry outcome (success, too-
+    // large failure, or retries exhausted). Not read outside PURouter.cpp.
+    uint8_t crc_retry_count = 0;
     // Set in PURouter (HandlePUASCII, RPU_NO_MORE_RECORDS) when the RPU signals
     // an offload is complete; consumed by Flight_PUOffload to end the pull.
     // Same as record_received -- shared, not docked-profile-specific.

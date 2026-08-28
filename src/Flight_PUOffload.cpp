@@ -27,6 +27,8 @@ bool StratoRachuts::Flight_PUOffload(bool restart_state)
     case ST_ENTRY:
         resend_attempted = false;
         packet_num = 0;
+        record_needs_retry = false;
+        crc_retry_count = 0;
         puoffload_state = ST_GET_PU_STATUS;
         break;
 
@@ -70,6 +72,12 @@ bool StratoRachuts::Flight_PUOffload(bool restart_state)
             log_nominal("No more profile records");
             pu_offload_success = true;
             return true;
+        } else if (record_needs_retry) {
+            // Checksum failed but PURouter already NAK'd and left retry budget;
+            // re-pull now instead of waiting out RESEND_PU_RECORD's timeout.
+            record_needs_retry = false;
+            puoffload_state = ST_REQUEST_PACKET;
+            break;
         }
 
         if (CheckAction(RESEND_PU_RECORD)) {

@@ -80,16 +80,30 @@ void StratoRachuts::HandlePUBin()
     // can handle all PU TM receipt here with ACKs/NAKs and tm_finished + buffer_ready flags
     switch (puComm.binary_rx.bin_id) {
     case RPU_PROFILE_RECORD:
+        if (!puComm.binary_rx.checksum_valid && crc_retry_count < MAX_CRC_RETRIES) {
+            // NAK and let Flight_PUOffload re-pull immediately: the checksum-
+            // failure root cause (a ReadChecksum() race, KnownIssues.md #1) is
+            // fixed, so a repull is now likely to succeed. The RPU only advances
+            // its offset on ACK, so nothing is lost by NAKing.
+            crc_retry_count++;
+            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record checksum invalid (len=%u), requesting resend (%u/%u)",
+                     puComm.binary_rx.bin_length, crc_retry_count, MAX_CRC_RETRIES);
+            log_error(log_array);
+            puComm.TX_Ack(RPU_PROFILE_RECORD, false);
+            record_needs_retry = true;
+            break;
+        }
+        crc_retry_count = 0;
+
         if (!puComm.binary_rx.checksum_valid) {
-            // Send it anyway rather than NAK/retry: a checksum failure here is
-            // usually a few corrupted bytes, not total garbage, and retries often
-            // fail too (dock-link corruption, KnownIssues.md #1), previously
-            // aborting the whole offload after two failures in a row. ACKing (below)
-            // is required even though the checksum is bad -- a NAK would leave this
-            // batch un-popped on the RPU, which would just resend the same bytes
-            // forever while RACHUTS moves on to "new" (but identical) requests.
-            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record checksum invalid (len=%u), sending to ground anyway",
-                     puComm.binary_rx.bin_length);
+            // Retry budget exhausted -- send it anyway rather than NAK/retry
+            // forever: a checksum failure here is usually a few corrupted bytes,
+            // not total garbage. ACKing (below) is required even though the
+            // checksum is bad -- a NAK would leave this batch un-popped on the
+            // RPU, which would just resend the same bytes forever while RACHUTS
+            // moves on to "new" (but identical) requests.
+            snprintf(log_array, LOG_ARRAY_SIZE, "Profile record checksum invalid (len=%u) after %u retries, sending to ground anyway",
+                     puComm.binary_rx.bin_length, MAX_CRC_RETRIES);
             log_error(log_array);
         }
         if (!zephyrTX.addTm(puComm.binary_rx.bin_buffer, puComm.binary_rx.bin_length)) {
