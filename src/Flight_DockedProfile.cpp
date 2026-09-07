@@ -109,6 +109,9 @@ bool StratoRachuts::Flight_DockedProfile(bool restart_state)
         profile_start_latitude = zephyrRX.zephyr_gps.latitude;
         profile_start_longitude = zephyrRX.zephyr_gps.longitude;
         profile_start_altitude = zephyrRX.zephyr_gps.altitude;
+        // Set the RPU's RTC at the start of the profile (NAK from PURouter means
+        // the RPU's RTC is already set, which is fine, not an error)
+        puComm.TX_SetTime((uint32_t) now());
         profile_state = ST_GO_MEASURE;
         break;
 

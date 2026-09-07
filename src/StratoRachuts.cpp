@@ -513,6 +513,10 @@ void StratoRachuts::PUStartProfile()
     profile_start_longitude = zephyrRX.zephyr_gps.longitude;
     profile_start_altitude = zephyrRX.zephyr_gps.altitude;
 
+    // Set the RPU's RTC at the start of the profile (NAK from PURouter means
+    // the RPU's RTC is already set, which is fine, not an error)
+    puComm.TX_SetTime((uint32_t) now());
+
     // Enable RPU MEASURE mode with the configured measurement parameters
     uint32_t meas_duration = CalcManualProfileDuration(deploy_length, retract_length, dock_length);
     puComm.TX_GoMeasure(meas_duration, pibConfigs.rpu_meas_rate.Read(),

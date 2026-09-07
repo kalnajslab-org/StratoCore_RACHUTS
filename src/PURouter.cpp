@@ -69,6 +69,16 @@ void StratoRachuts::HandlePUAck()
     case RPU_SET_STATUS_RATE:
         log_nominal("RPU acked status rate");
         break;
+    case RPU_SET_TIME:
+        // ACK means the RPU's RTC was unset and has now been set by this
+        // command; NAK means it was already set (e.g. by an earlier
+        // profile) -- not an error, so only ACK is reported to the ground.
+        if (puComm.ack_value) {
+            SendTextTM("RPU RTC set", FINE);
+        } else {
+            log_nominal("RPU RTC already set, not updated");
+        }
+        break;
     default:
         log_error("Unknown RPU ack received");
         break;
