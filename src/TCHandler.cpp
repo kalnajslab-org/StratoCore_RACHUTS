@@ -193,9 +193,9 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         msg2 = "PU powered off";
         digitalWrite(PU_PWR_ENABLE, LOW);
         break;
-    case MANUALPROFILE:
-        msg2 = "TC Manual Profile";
-        if (!RequireFlightMode("Manual profile", msg3, msg1_flag)) break;
+    case PROFILE:
+        msg2 = "TC Profile";
+        if (!RequireFlightMode("Profile", msg3, msg1_flag)) break;
         pibConfigs.profile_size.Write(pibParam.profileSize);
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
@@ -208,7 +208,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
             float est_deploy_len = pibParam.profileSize;
             float est_retract_len = pibParam.profileSize - pibParam.dockAmount;
             float est_dock_len = pibParam.dockAmount + pibParam.dockOvershoot;
-            uint32_t est_duration = CalcManualProfileDuration(est_deploy_len, est_retract_len, est_dock_len);
+            uint32_t est_duration = CalcProfileDuration(est_deploy_len, est_retract_len, est_dock_len);
             // Kept short: StateMess fields are silently truncated at 100 chars
             // by the shared XMLWriter (writeAndUpdateCRC's const char* loop).
             msg2 += ": size=" + String(pibParam.profileSize, 1) + " dock=" + String(pibParam.dockAmount, 1)
@@ -216,7 +216,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
                   + " rate=" + String(pibConfigs.rpu_meas_rate.Read()) + "s"
                   + " time=" + String(est_duration) + "s";
         }
-        SetAction(COMMAND_MANUAL_PROFILE);
+        SetAction(COMMAND_PROFILE);
         break;
     case OFFLOADPUPROFILE:
         msg2 = "TC Offload PU Profile";
@@ -299,6 +299,14 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
             pibConfigs.docked_offload_period.Write(pibParam.dockedOffloadPeriod);
             msg2 += ": " + String(pibConfigs.docked_offload_period.Read());
         }
+        break;
+    case RAACKOVERRIDEON:
+        msg2 = "RA over ON";
+        ra_ack_override = true;
+        break;
+    case RAACKOVERRIDEOFF:
+        msg2 = "RA over OFF";
+        ra_ack_override = false;
         break;
 
     // PU Telecommands ------------------------------------

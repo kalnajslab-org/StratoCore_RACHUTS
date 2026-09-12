@@ -34,7 +34,7 @@ bool StratoRachuts::Flight_ManualMotion(bool restart_state)
         break;
 
     case ST_WAIT_RAACK:
-        if(pibConfigs.ra_override.Read()) //Over Ride RA requirement in an emergency
+        if (ra_ack_override) // TC-commanded bypass of the RA ack requirement (emergency use)
             RA_ack_flag = ACK;
         if (ACK == RA_ack_flag) {
             manualmotion_state = ST_START_MOTION;

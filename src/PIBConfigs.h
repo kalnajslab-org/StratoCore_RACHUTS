@@ -25,7 +25,7 @@ public:
     PIBConfigs();
 
     // constants, manually change version number here to force update
-    static const uint16_t CONFIG_VERSION = 0x5C09;
+    static const uint16_t CONFIG_VERSION = 0x5C0A;
     static const uint16_t BASE_ADDRESS = 0x0000;
 
     // ------------------ Configurations ------------------
@@ -45,7 +45,7 @@ public:
     // RPU configuration
     EEPROMData<float>    rpu_bat_temp;       // battery temperature threshold in degC
     EEPROMData<uint16_t> rpu_status_rate;   // status reporting rate in seconds
-    EEPROMData<uint16_t> rpu_meas_rate;     // measurement sample rate in seconds (set via MANUALPROFILE)
+    EEPROMData<uint16_t> rpu_meas_rate;     // measurement sample rate in seconds (set via PROFILE)
     EEPROMData<uint8_t> rpu_enable_TSEN;    // 1=enabled, 0=disabled
     EEPROMData<uint8_t> rpu_enable_ROPC;    // 1=enabled, 0=disabled
     EEPROMData<uint8_t> rpu_enable_RS41;    // 1=enabled, 0=disabled
@@ -65,7 +65,6 @@ public:
     EEPROMData<bool> real_time_mcb;
 
     EEPROMData<uint16_t> profile_id;
-    EEPROMData<bool> ra_override;
 
     // Docked profile periodic offload interval, in seconds. 0 disables periodic
     // offload (single offload at the end of the profile, the legacy behavior).

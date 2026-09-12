@@ -34,7 +34,6 @@ PIBConfigs::PIBConfigs()
     , pu_docked(false)
     , real_time_mcb(false)
     , profile_id(1)
-    , ra_override(false)
     , docked_offload_period(30*60)
     // ----------------------------------------------------
 { }
@@ -65,7 +64,6 @@ void PIBConfigs::RegisterAll()
     success &= Register(&pu_docked);
     success &= Register(&real_time_mcb);
     success &= Register(&profile_id);
-    success &= Register(&ra_override);
     success &= Register(&docked_offload_period);
 
     if (!success) {

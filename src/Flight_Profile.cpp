@@ -51,6 +51,8 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
 
     case ST_WAIT_RAACK:
         log_debug("FLA wait RA Ack");
+        if (ra_ack_override) // TC-commanded bypass of the RA ack requirement (emergency use)
+            RA_ack_flag = ACK;
         if (ACK == RA_ack_flag) { // set by Zephyr RA ack handler
             profile_state = ST_SET_PU_PROFILE;
             resend_attempted = false;

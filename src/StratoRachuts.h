@@ -112,7 +112,7 @@ enum ScheduleAction_t : uint8_t {
 
     // Multi-action commands
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
-    COMMAND_MANUAL_PROFILE,
+    COMMAND_PROFILE,
     COMMAND_DOCKED_PROFILE,
 
     // used for tracking
@@ -257,12 +257,12 @@ private:
     // PU start profile command generation and transmit
     void PUStartProfile();
 
-    // Auto-calculated total RPU measurement duration for a manual profile:
+    // Auto-calculated total RPU measurement duration for a profile:
     // deploy time + dwell + retract/dock time, with margin for the
     // pre-profile wait and motion timeout. Shared by PUStartProfile() (which
-    // uses it to command the RPU) and the MANUALPROFILE TC ack (which reports
+    // uses it to command the RPU) and the PROFILE TC ack (which reports
     // it before the profile actually starts).
-    uint32_t CalcManualProfileDuration(float deploy_len, float retract_len, float dock_len);
+    uint32_t CalcProfileDuration(float deploy_len, float retract_len, float dock_len);
 
     // Read the analog channels on the PIB
     void ReadAnalog();
@@ -281,6 +281,12 @@ private:
     bool mcb_reeling_in = false;
     uint16_t mcb_tm_counter = 0;
     float reel_pos = 0.0;
+
+    // Set/cleared only by TC (RAACKOVERRIDEON/OFF, 158/159); not persisted, so
+    // it always resets to false (RA ack required) on reboot. Lets
+    // Flight_ManualMotion and Flight_Profile bypass the RA-ack requirement
+    // for emergency use.
+    bool ra_ack_override = false;
 
 
     // flags for PU state tracking

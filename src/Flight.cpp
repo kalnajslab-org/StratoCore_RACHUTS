@@ -131,8 +131,8 @@ void StratoRachuts::ManualFlight()
             mcb_motion = MOTION_IN_NO_LW;
             Flight_ReDock(true);
             inst_substate = FLM_REDOCK;
-        } else if (CheckAction(COMMAND_MANUAL_PROFILE)) {
-            log_nominal("Profile manual command");
+        } else if (CheckAction(COMMAND_PROFILE)) {
+            log_nominal("Profile command");
             Flight_Profile(true);
             inst_substate = FLM_PROFILE;
         } else if (CheckAction(ACTION_OFFLOAD_PU)) {

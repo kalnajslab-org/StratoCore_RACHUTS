@@ -518,7 +518,7 @@ void StratoRachuts::PUStartProfile()
     puComm.TX_SetTime((uint32_t) now());
 
     // Enable RPU MEASURE mode with the configured measurement parameters
-    uint32_t meas_duration = CalcManualProfileDuration(deploy_length, retract_length, dock_length);
+    uint32_t meas_duration = CalcProfileDuration(deploy_length, retract_length, dock_length);
     puComm.TX_GoMeasure(meas_duration, pibConfigs.rpu_meas_rate.Read(),
                         pibConfigs.rpu_bat_temp.Read(),
                         pibConfigs.rpu_enable_ROPC.Read(), pibConfigs.rpu_enable_TDLAS.Read(),
@@ -529,7 +529,7 @@ void StratoRachuts::PUStartProfile()
 
 // Total time the RPU should keep sampling to span deploy + dwell + retract/dock,
 // so it doesn't stop early regardless of how long the actual motion takes.
-uint32_t StratoRachuts::CalcManualProfileDuration(float deploy_len, float retract_len, float dock_len)
+uint32_t StratoRachuts::CalcProfileDuration(float deploy_len, float retract_len, float dock_len)
 {
     uint32_t t_down = 60 * (deploy_len / pibConfigs.deploy_velocity.Read()) + pibConfigs.preprofile_time.Read();
     uint32_t t_up = 60 * (retract_len / pibConfigs.retract_velocity.Read() + dock_len / pibConfigs.dock_velocity.Read())
