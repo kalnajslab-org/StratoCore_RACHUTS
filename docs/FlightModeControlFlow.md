@@ -104,7 +104,7 @@ inside `FL_ERROR_LOOP`.
 | 3 | `ACTION_DOCK` | 7 `DOCKx` | `Flight_ManualMotion` (`MOTION_DOCK`) | `FLM_MANUAL_MOTION` |
 | 4 | `ACTION_CHECK_PU` | 143 `GETPUSTATUS` | `Flight_CheckPU` | `FLM_CHECK_PU` |
 | 5 | `COMMAND_REDOCK` | 142 `RETRYDOCK` | `Flight_ReDock` (`MOTION_IN_NO_LW` first) | `FLM_REDOCK` |
-| 6 | `COMMAND_MANUAL_PROFILE` | 146 `MANUALPROFILE` | `Flight_Profile` | `FLM_PROFILE` |
+| 6 | `COMMAND_PROFILE` | 146 `PROFILE` | `Flight_Profile` | `FLM_PROFILE` |
 | 7 | `ACTION_OFFLOAD_PU` | 147 `OFFLOADPUPROFILE` | `Flight_PUOffload` | `FLM_PU_OFFLOAD` |
 | 8 | `COMMAND_DOCKED_PROFILE` | 153 `DOCKEDPROFILE` | `Flight_DockedProfile` | `FLM_DOCKED` |
 
@@ -181,8 +181,10 @@ stateDiagram-v2
 
 One resend is attempted; a second timeout gives up and returns `true`
 (sub-machine finished, unsuccessfully) with a `WARN` TM.
-`pibConfigs.ra_override` lets `Flight_ManualMotion` (only) bypass this entirely
-for emergency use — `Flight_Profile` has no such override.
+`ra_ack_override` lets both `Flight_ManualMotion` and `Flight_Profile` bypass
+this entirely for emergency use. It's a runtime flag set only by TC
+(`RAACKOVERRIDEON`/`RAACKOVERRIDEOFF`, 158/159), not persisted in `PIBConfigs`,
+so it always resets to off (RA ack required) on reboot.
 
 ### 2. Starting MCB motion (`StartMCBMotion` + the verify/monitor pair)
 
@@ -280,7 +282,7 @@ step.
 stateDiagram-v2
     [*] --> ST_SEND_RA
     ST_SEND_RA --> ST_WAIT_RAACK
-    ST_WAIT_RAACK --> ST_START_MOTION: ACK (or ra_override)
+    ST_WAIT_RAACK --> ST_START_MOTION: ACK (or ra_ack_override)
     ST_WAIT_RAACK --> [*]: NAK / timeout (WARN)
     ST_START_MOTION --> ST_VERIFY_MOTION
     ST_START_MOTION --> MODE_ERROR
@@ -337,7 +339,7 @@ shared call.
 
 ## `Flight_Profile` (`FLM_PROFILE`) — full manual profile (TC 146)
 
-Triggered by TC 146 (`MANUALPROFILE`) via `FLM_IDLE` (mechanism 1); no other
+Triggered by TC 146 (`PROFILE`) via `FLM_IDLE` (mechanism 1); no other
 sub-machine invokes it. The largest sub-machine: RA handshake → PU go-measure
 handshake → pre-profile warm-up wait → reel out → dwell → reel in →
 dock-with-retry loop → MCB low-power confirm.
@@ -346,7 +348,7 @@ dock-with-retry loop → MCB low-power confirm.
 stateDiagram-v2
     [*] --> ST_SEND_RA
     ST_SEND_RA --> ST_WAIT_RAACK
-    ST_WAIT_RAACK --> ST_SET_PU_PROFILE: ACK
+    ST_WAIT_RAACK --> ST_SET_PU_PROFILE: ACK (or ra_ack_override)
     ST_WAIT_RAACK --> [*]: NAK / timeout (WARN)
 
     ST_SET_PU_PROFILE --> ST_CONFIRM_PU_PROFILE: compute lengths, TX go-measure
@@ -389,7 +391,7 @@ Key details not obvious from the diagram:
 - **Profile geometry is derived, not passed directly:** `retract_length =
   profile_size − dock_amount`, `deploy_length = profile_size`, `dock_length =
   dock_amount + dock_overshoot`. All three come from `pibConfigs`, which TC 146
-  writes before `SetAction(COMMAND_MANUAL_PROFILE)`.
+  writes before `SetAction(COMMAND_PROFILE)`.
 - **`ST_MONITOR_MOTION` is one state serving three motions** — reel-out,
   reel-in, and dock all land in the same monitor state; a nested `switch
   (mcb_motion)` on completion decides where to go next (dwell / dock-wait /
@@ -522,7 +524,7 @@ ACTION_END_DOCK_WAIT,
 
 // Multi-action commands
 COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
-COMMAND_MANUAL_PROFILE,
+COMMAND_PROFILE,
 COMMAND_DOCKED_PROFILE,
 ```
 
@@ -545,7 +547,7 @@ The prefixes exist purely to signal intent to a reader:
   out — *"reel out, reel in (no lw), check PU"* — and that's exactly what
   `Flight_ReDock`'s `ST_ENTRY` does: it re-triggers three separate `ACTION_*`
   flags (`ACTION_REEL_OUT` now, `ACTION_IN_NO_LW` at +30 s, `ACTION_CHECK_PU`
-  at +60 s). Likewise `COMMAND_MANUAL_PROFILE` (`Flight_Profile`) and
+  at +60 s). Likewise `COMMAND_PROFILE` (`Flight_Profile`) and
   `COMMAND_DOCKED_PROFILE` (`Flight_DockedProfile`) are each multi-phase
   operations bundling an RA handshake + PU measure + motion + dwell + etc.
 

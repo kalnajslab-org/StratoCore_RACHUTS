@@ -414,7 +414,7 @@ future comms symptom.
 
 ## 11. Flight-only TCs silently no-op in the flight error state (RACHUTS) — **OPEN (fix planned)**
 
-The flight-only TCs (RETRYDOCK 142, GETPUSTATUS 143, MANUALPROFILE 146,
+The flight-only TCs (RETRYDOCK 142, GETPUSTATUS 143, PROFILE 146,
 OFFLOADPUPROFILE 147, DOCKEDPROFILE 153) just `SetAction(...)`; the action is
 only *consumed* in `ManualFlight`'s `FLM_IDLE`. `RequireFlightMode` only checks
 `mode_code == "FL"`, which is still true when the instrument is parked in the

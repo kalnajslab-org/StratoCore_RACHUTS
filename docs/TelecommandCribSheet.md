@@ -54,7 +54,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
 | 142 | RETRYDOCK | Manual redock (**flight only**) | deploy len (rev), retract len (rev) |
-| 146 | MANUALPROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s), RPU sample rate (s) |
+| 146 | PROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s), RPU sample rate (s) |
 | 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**flight only**) | — |
 | 148 | SETPREPROFILETIME | Pre-profile wait after RPU enters measure | time (uint16, s) |
 | 150 | AUTOREDOCKPARAMS | Auto-redock parameters | redock out (rev), redock in (rev), max retries |
@@ -64,6 +64,8 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
 | 156 | CANCELMEASURE | Cancel an in-progress docked profile (sends RPU to standby, offloads what was collected) | — |
 | 157 | SETDOCKEDOFFLOADPERIOD | Set the docked profile's periodic offload interval (EEPROM-persisted) | period (uint16, s); 0 = offload once at the end (legacy) |
+| 158 | RAACKOVERRIDEON | Bypass the RA-ack requirement for manual motion and profiles (**not persisted**, resets off on reboot) | — |
+| 159 | RAACKOVERRIDEOFF | Restore the normal RA-ack requirement | — |
 
 ## RPU (Profiler) dock control
 
@@ -93,7 +95,7 @@ Notes:
   (not persisted to EEPROM); sensor-enable flags and battery setpoint still
   come from the stored RPUCONFIG. The periodic-offload interval comes from
   TC 157 (`SETDOCKEDOFFLOADPERIOD`, EEPROM-persisted), not from this TC.
-- **TC 146 (MANUALPROFILE)** does not take a duration: `CalcManualProfileDuration()`
+- **TC 146 (PROFILE)** does not take a duration: `CalcProfileDuration()`
   auto-calculates the RPU measurement duration from the profile's own motion
   parameters (deploy/retract/dock length and velocity, `preprofile_time`
   margin before motion, `motion_timeout` margin after, plus `dwell_time`), so
@@ -140,7 +142,7 @@ Notes:
   - `184` RPUGOSTANDBY *(no params)*
   - `147` OFFLOADPUPROFILE *(no params)* → RPUREPORT TMs.
 - **Manual profile:**
-  - `146` MANUALPROFILE(profile size rev, dock amount rev, dock overshoot rev, dwell s, RPU sample rate s)
+  - `146` PROFILE(profile size rev, dock amount rev, dock overshoot rev, dwell s, RPU sample rate s)
 - **Dump configs:**
   - `18` GETMCBEEPROM *(no params)*
   - `152` GETPIBEEPROM *(no params)*
