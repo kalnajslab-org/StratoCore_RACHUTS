@@ -66,6 +66,13 @@ void StratoRachuts::HandlePUAck()
     case RPU_RESET:
         SendTextTM("RPU acked reset", FINE);
         break;
+    case RPU_REGEN_RS41:
+        if (puComm.ack_value) {
+            SendTextTM("RPU RS41 regen started", FINE);
+        } else {
+            SendTextTM("RPU NAKed RS41 regen (RS41 not in MEASURE with RS41 enabled)", WARN);
+        }
+        break;
     case RPU_SET_STATUS_RATE:
         log_nominal("RPU acked status rate");
         break;

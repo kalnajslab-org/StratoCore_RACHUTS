@@ -318,6 +318,10 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         msg2 = "TC RPU Reset";
         puComm.TX_ASCII(RPU_RESET);
         break;
+    case RPUREGENRS41:
+        msg2 = "TC RPU RS41 Regen";
+        puComm.TX_ASCII(RPU_REGEN_RS41);
+        break;
     case RPUCONFIG:
         pibConfigs.rpu_enable_ROPC.Write(rpuParam.enableROPC);
         pibConfigs.rpu_enable_TDLAS.Write(rpuParam.enableTDLAS);

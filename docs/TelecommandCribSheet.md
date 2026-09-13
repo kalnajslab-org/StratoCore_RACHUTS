@@ -80,12 +80,23 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | 183 | RPURESET | Reboot the RPU via dock serial | — |
 | 184 | RPUGOSTANDBY | Command RPU to STANDBY | — |
 | 185 | RPUGOMEASURE | Command RPU to MEASURE | duration (s), rate (s) |
+| 186 | RPUREGENRS41 | Trigger an RS41 regeneration cycle (requires RPU in MEASURE with RS41 enabled) | — |
 
 Notes:
 - **RPUGOMEASURE validation:** `rate` must be > 0; a nonzero `duration` must
   be greater than `rate` (else the TC is NAK'd). `duration = 0` means "run
   until commanded to STANDBY / record buffer full." TC 185 is dev-testing
   only, not used in flight operations.
+- **TC 186 (RPUREGENRS41)** is fire-and-forget like RPURESET/RPUGOSTANDBY/
+  RPUGOMEASURE -- no docked check on the RACHuTS side (the dock-serial link
+  simply won't reach the RPU if undocked, and no ACK/NAK will ever arrive).
+  The RPU itself NAKs the request unless it's in MEASURE with RS41 enabled
+  (i.e. during `RPUGOMEASURE`/`PROFILE`/a docked profile), which is what
+  actually enforces "docked profile only, not idle standby." The ACK/NAK
+  arrives asynchronously as its own TM ("RPU RS41 regen started" / "RPU
+  NAKed RS41 regen ..."); there is no separate "regen complete" TM --
+  progress is inferred from the ordinary RPU status/RS41 record telemetry
+  that's already flowing.
 - **DOCKEDPROFILE validation is stricter:** `rate` must be > 0, and `duration`
   must always be nonzero **and** greater than `rate` (else the TC is NAK'd) --
   a docked profile must never be unbounded, unlike RPUGOMEASURE.
