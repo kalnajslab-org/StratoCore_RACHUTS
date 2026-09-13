@@ -32,9 +32,11 @@ TM's type purely by convention, using the 3 slots as follows:
 - **Slot 2** — human-readable context: mode+source for RACHUTSREPORT, the log
   text for RACHUTSTEXT/MCB* messages, profile/period/packet counters for
   RPUREPORT. Always forced `FINE` — slot 2 never carries its own severity.
-- **Slot 3** — fixed-format side channel: reel position (`"Reel: X.XX"`) on
-  nearly every motion-relevant TM, or `pu_last_status`/lat/lon/alt on
-  RPUREPORT. Also always forced `FINE`.
+- **Slot 3** — fixed-format side channel: profile number + reel position
+  (`"Profile: N Reel: X.XX"`) on every `SendMCBTM`-originated TM (MCBREPORT/
+  MCBASCII/MCBACK/MCBSTRING; issue #19 — lets ground line up an MCBREPORT
+  with its corresponding RPUREPORT(s) by profile number), or
+  `pu_last_status`/lat/lon/alt on RPUREPORT. Also always forced `FINE`.
 - Pure binary/dump TMs with no narrative (MCBEEPROM, RACHUTSEEPROM) set
   slots 2/3 to `NOMESS` with empty details — only slot 1's `FINE` + name is
   meaningful.

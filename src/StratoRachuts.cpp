@@ -397,14 +397,19 @@ void StratoRachuts::SendMCBTM(const char * TMname, StateFlag_t state_flag, const
     zephyrTX.addTm(MCB_TM_buffer, MCB_TM_buffer_idx);
 
     // StateMess1 = category tag (MCBACK/MCBASCII/MCBREPORT/MCBSTRING), StateMess2
-    // = message, StateMess3 = current reel position.
+    // = message, StateMess3 = current profile number + reel position.
     zephyrTX.setStateDetails(1, TMname);
     zephyrTX.setStateFlagValue(1, state_flag);
 
     zephyrTX.setStateDetails(2, message);
     zephyrTX.setStateFlagValue(2, FINE);
 
-    zephyrTX.setStateDetails(3, (String("Reel: ") + String(reel_pos, 2)).c_str());
+    // Profile number first, reel position second: the profile number changes
+    // far less often (once per profile) than reel position (continuously
+    // during motion), and it lets ground line up an MCBREPORT with the
+    // RPUREPORT(s) from the same profile (issue #19).
+    zephyrTX.setStateDetails(3, (String("Profile: ") + String(pibConfigs.profile_id.Read())
+                                + " Reel: " + String(reel_pos, 2)).c_str());
     zephyrTX.setStateFlagValue(3, FINE);
 
     TM_ack_flag = NO_ACK;
