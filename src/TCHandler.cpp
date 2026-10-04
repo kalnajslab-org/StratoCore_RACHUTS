@@ -100,7 +100,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case ZEROREEL:
         msg2 = "TC Zero Reel";
-        if (mcb_dock_ongoing) {
+        if (mcb_motion_ongoing) {
             msg3 = "Can't zero reel, motion ongoing";
             msg1_flag = WARN;
         } else {

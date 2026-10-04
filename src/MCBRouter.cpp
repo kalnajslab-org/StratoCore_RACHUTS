@@ -36,6 +36,7 @@ void StratoRachuts::HandleMCBASCII()
     case MCB_MOTION_FINISHED:
         CheckAction(ACTION_MOTION_TIMEOUT); // clear the timeout
         log_nominal("MCB motion finished"); // state machine will report to Zephyr
+        mcb_dock_ongoing = false;
         mcb_motion_ongoing = false;
         break;
     case MCB_MOTION_FAULT:
