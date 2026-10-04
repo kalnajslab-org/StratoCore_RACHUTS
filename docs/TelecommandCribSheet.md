@@ -3,7 +3,7 @@
 Quick reference for the telecommands RACHUTS (PIB) accepts. Numbers are the TC
 id. "Params" lists the ordered parameters the command expects; commands with no
 Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
-`src/TCHandler.cpp` (handlers). Last updated 2026-08-25.
+`src/TCHandler.cpp` (handlers). Last updated 2026-10-04.
 
 > Only the commands below are handled by RACHUTS. TC ranges for other
 > instruments — **50–57** (FTR/DIB), **60–76** (RATS/ECU), **100–119** (PHA) —
@@ -13,20 +13,26 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 
 ## MCB / reel motion (1–12, 22)
 
+TCs marked **flight idle only** are rejected with a WARN in the TC ack unless
+RACHUTS is in flight mode with nothing running (e.g. "Deploy ignored: profile in
+progress", "... ignored: in flight error state (send EXITERROR)"), and nothing
+is changed. To make a manual motion during a profile: CANCELMOTION (11), then
+EXITERROR (201) if needed, then the motion TC.
+
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 1 | DEPLOYx | Reel out | deploy length (rev) |
+| 1 | DEPLOYx | Reel out (**flight idle only**) | deploy length (rev) |
 | 2 | DEPLOYv | Set deploy velocity | velocity (rev/s) |
 | 3 | DEPLOYa | Set deploy acceleration | accel (rev/s²) |
-| 4 | RETRACTx | Reel in | retract length (rev) |
+| 4 | RETRACTx | Reel in (**flight idle only**) | retract length (rev) |
 | 5 | RETRACTv | Set retract velocity | velocity (rev/s) |
 | 6 | RETRACTa | Set retract acceleration | accel (rev/s²) |
-| 7 | DOCKx | Set dock length | dock length (rev) |
+| 7 | DOCKx | Dock (**flight idle only**) | dock length (rev) |
 | 8 | DOCKv | Set dock velocity | velocity (rev/s) |
 | 9 | DOCKa | Set dock acceleration | accel (rev/s²) |
 | 10 | FULLRETRACT | Full retract | — |
 | 11 | CANCELMOTION | Cancel any ongoing motion | — |
-| 12 | ZEROREEL | Zero the reel position | — |
+| 12 | ZEROREEL | Zero the reel position (rejected if motion ongoing or a flight sequence is running) | — |
 | 22 | CENTERLW | Center the level wind (rejected if motion ongoing) | — |
 
 ## Motion limits / MCB (13–18)
@@ -53,13 +59,13 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 142 | RETRYDOCK | Manual redock (**flight only**) | deploy len (rev), retract len (rev) |
-| 146 | PROFILE | Execute a profile (**flight only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s), RPU sample rate (s) |
-| 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**flight only**) | — |
+| 142 | RETRYDOCK | Manual redock (**flight idle only**) | deploy len (rev), retract len (rev) |
+| 146 | PROFILE | Execute a profile (**flight idle only**) | profile size (rev), dock amount (rev), dock overshoot (rev), dwell (s), RPU sample rate (s) |
+| 147 | OFFLOADPUPROFILE | Offload stored RPU profile data (**flight idle only**) | — |
 | 148 | SETPREPROFILETIME | Pre-profile wait after RPU enters measure | time (uint16, s) |
 | 150 | AUTOREDOCKPARAMS | Auto-redock parameters | redock out (rev), redock in (rev), max retries |
 | 151 | SETMOTIONTIMEOUT | Motion timeout | timeout (uint16, s) |
-| 153 | DOCKEDPROFILE | Execute a docked profile (**flight only**) | duration (s), rate (s) |
+| 153 | DOCKEDPROFILE | Execute a docked profile (**flight idle only**) | duration (s), rate (s) |
 | 154 | STARTREALTIMEMCB | Enable real-time MCB data streaming | — |
 | 155 | EXITREALTIMEMCB | Disable real-time MCB data streaming | — |
 | 156 | CANCELMEASURE | Cancel an in-progress docked profile (sends RPU to standby, offloads what was collected) | — |
@@ -71,7 +77,7 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
-| 143 | GETPUSTATUS | Request RPU status over dock (**flight only**) → RACHUTSREPORT TM | — |
+| 143 | GETPUSTATUS | Request RPU status over dock (**flight idle only**) → RACHUTSREPORT TM | — |
 | 144 | PUPOWERON | Enable RPU dock power | — |
 | 145 | PUPOWEROFF | Disable RPU dock power | — |
 | 180 | RPUCONFIG | Configure RPU sensor enables (stored) | ROPC, TDLAS, TSEN, RS41 |

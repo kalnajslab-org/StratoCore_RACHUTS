@@ -71,10 +71,10 @@ from when it sat after five now-removed autonomous-only substates), on the
 theory that ground tooling/operators might depend on that specific number. That
 pin has since been removed — nothing in the firmware itself depends on the
 value, and the system is pre-deployment, so the substate is now free to
-renumber naturally (**9**, following directly after `FLM_DOCKED`). See
-`KnownIssues.md` §11 for a known gap in this area (flight-only TCs silently
-no-op while parked in `FL_ERROR_LOOP`, because `RequireFlightMode` only checks
-`mode_code == "FL"`).
+renumber naturally (**9**, following directly after `FLM_DOCKED`). Flight-only TCs
+that start a sequence are rejected with a WARN while parked in `FL_ERROR_LOOP`
+(or while any sequence is running) by `RequireFlightIdle()`; see
+`KnownIssues.md` §11.
 
 `SendPeriodicRACHUTSREPORT()` runs at the very top of `FlightMode()`, before
 the substate switch — so it fires every loop regardless of substate, including
@@ -125,9 +125,10 @@ case FLM_MANUAL_MOTION:
 without blocking on the periodic timer.
 
 `CANCELMOTION` (TC 11) is handled outside this table — it sets
-`ACTION_MOTION_STOP`, which `Flight_ManualMotion`, `Flight_ReDock`, and
-`Flight_Profile` all poll for independently inside their own "monitor motion"
-states (see below), and it also unconditionally sends `MCB_CANCEL_MOTION` to the
+`ACTION_MOTION_STOP`. `Flight_Profile`, `Flight_ManualMotion` and
+`Flight_ReDock` check it once at the top of the function, ahead of their state
+switch, so it's acted on in every state. If no state machine consumes the flag before it goes stale,
+`WatchFlags()` sends a WARN TM saying the cancel wasn't acted on. TC 11 also unconditionally sends `MCB_CANCEL_MOTION` to the
 MCB regardless of mode/substate.
 
 ### Three ways a sub-machine gets invoked
@@ -201,14 +202,21 @@ stateDiagram-v2
     ST_VERIFY_MOTION --> MODE_ERROR: RESEND_MOTION_COMMAND (2nd time)
     ST_MONITOR_MOTION --> done: !mcb_motion_ongoing (MCB reports finished)
     ST_MONITOR_MOTION --> escaped: ACTION_MOTION_STOP (TC 11 CANCELMOTION)
-    ST_MONITOR_MOTION --> MODE_ERROR: ACTION_MOTION_TIMEOUT
+    ST_MONITOR_MOTION --> MODE_ERROR: motion_deadline_ms passed
 ```
 
 `StartMCBMotion()` (in `StratoRachuts.cpp`) is the shared helper that maps
 `mcb_motion` (`MOTION_REEL_IN/OUT/DOCK/IN_NO_LW`) to the matching `mcbComm.TX_*`
 call, computes `max_profile_seconds` (the motion timeout budget) from the
 configured velocity + `motion_timeout`, and sends a `RACHUTSTEXT` FINE TM
-describing the motion. `mcb_motion_ongoing` is set/cleared asynchronously by the
+describing the motion. When the MCB acks the motion, `ST_VERIFY_MOTION` sets
+`motion_deadline_ms = millis() + max_profile_seconds * 1000`, and
+`ST_MONITOR_MOTION` faults if that deadline passes. This is a `millis()`
+deadline rather than a scheduled action on purpose: the scheduler can't cancel
+a single queued action, so a scheduled timeout outlived a motion that finished
+early and could fire during the next motion (a false "took longer than
+expected" fault). The deadline is only read while its own motion is being
+monitored, so it can't leak into a later one. `mcb_motion_ongoing` is set/cleared asynchronously by the
 MCB ack/complete handlers in `MCBRouter.cpp`, not by these state machines
 directly.
 
@@ -288,8 +296,10 @@ stateDiagram-v2
     ST_START_MOTION --> MODE_ERROR
     ST_VERIFY_MOTION --> ST_MONITOR_MOTION
     ST_VERIFY_MOTION --> MODE_ERROR
-    ST_MONITOR_MOTION --> [*]: ACTION_MOTION_STOP (FINE "Commanded motion stop")
-    ST_MONITOR_MOTION --> MODE_ERROR: ACTION_MOTION_TIMEOUT
+    ST_SEND_RA --> [*]: ACTION_MOTION_STOP before motion sent (WARN, schedule cleared)
+    ST_WAIT_RAACK --> [*]: ACTION_MOTION_STOP before motion sent (WARN, schedule cleared)
+    ST_MONITOR_MOTION --> [*]: ACTION_MOTION_STOP (FINE "Commanded motion stop", schedule cleared; also from ST_START_MOTION/ST_VERIFY_MOTION)
+    ST_MONITOR_MOTION --> MODE_ERROR: motion_deadline_ms passed
     ST_MONITOR_MOTION --> ST_TM_ACK: !mcb_motion_ongoing (MCBREPORT FINE sent)
     ST_TM_ACK --> [*]: ACK
     ST_TM_ACK --> [*]: NAK or RESEND_TM (one resend attempt, then exit anyway)
@@ -308,29 +318,31 @@ when a post-dock PU check finds the RPU not docked (redock-and-retry loop);
 ```mermaid
 stateDiagram-v2
     [*] --> ST_ENTRY
-    ST_ENTRY --> ST_IDLE: SetAction(REEL_OUT) now, schedule IN_NO_LW@30s, CHECK_PU@60s
-    ST_IDLE --> ST_START_MOTION: ACTION_REEL_OUT due
-    ST_IDLE --> ST_START_MOTION: ACTION_IN_NO_LW due (@30s)
-    ST_IDLE --> ST_CHECK_PU: ACTION_CHECK_PU due (@60s)
+    ST_ENTRY --> ST_START_MOTION: mcb_motion=REEL_OUT, record redock_start_ms
     ST_START_MOTION --> ST_VERIFY_MOTION
     ST_START_MOTION --> MODE_ERROR
     ST_VERIFY_MOTION --> ST_MONITOR_MOTION
     ST_VERIFY_MOTION --> MODE_ERROR
-    ST_MONITOR_MOTION --> ST_IDLE: !mcb_motion_ongoing (loops back for next scheduled step)
-    ST_MONITOR_MOTION --> [*]: ACTION_MOTION_STOP
+    ST_MONITOR_MOTION --> ST_WAIT_STEP: !mcb_motion_ongoing
+    ST_WAIT_STEP --> ST_START_MOTION: reel-out finished and start+30s reached (mcb_motion=IN_NO_LW)
+    ST_WAIT_STEP --> ST_CHECK_PU: reel-in finished and start+60s reached
+    ST_START_MOTION --> [*]: ACTION_MOTION_STOP before reel-out sent (WARN, schedule cleared)
+    ST_WAIT_STEP --> MODE_ERROR: ACTION_MOTION_STOP after a motion was sent (WARN; also from the motion states)
+    ST_MONITOR_MOTION --> MODE_ERROR: motion_deadline_ms passed
     ST_CHECK_PU --> ST_WAIT_PU: TX RPU_SEND_STATUS
     ST_WAIT_PU --> [*]: pu_docked (force_rachutsreport=true, MCB_ZERO_REEL)
     ST_WAIT_PU --> ST_CHECK_PU: RESEND_PU_CHECK (1st time)
     ST_WAIT_PU --> [*]: RESEND_PU_CHECK (2nd time, WARN)
 ```
 
-This is the one sub-machine that pre-schedules multiple future actions up front
-(`ST_ENTRY`) rather than chaining them sequentially: reel-out fires immediately,
-"in, no levelwind" fires 30 s later, and a PU check fires 60 s later, all via
-the scheduler — `ST_IDLE` just waits for whichever comes due and re-enters
-`ST_START_MOTION` for the motion ones. Note there's no explicit "reel-out
-finished" check gating the 30 s/60 s timers — they're time-based, not
-motion-complete-based.
+The steps run in sequence: reel-out immediately, then "in, no levelwind" no
+earlier than 30 s after the start, then the PU check no earlier than 60 s after
+the start. Each step also waits for the previous motion to finish
+(`ST_WAIT_STEP`), using `millis()` deadlines from `redock_start_ms` rather than
+the scheduler. This used to pre-schedule `ACTION_IN_NO_LW`@+30 s and
+`ACTION_CHECK_PU`@+60 s in `ST_ENTRY`; if the reel-out was still running at
++30 s, the reel-in flag went stale and the reel-in was silently skipped. The
+timing is unchanged whenever the reel-out finishes within 30 s.
 
 Despite the name, **`ST_CHECK_PU`/`ST_WAIT_PU` do not call `Flight_CheckPU()`**
 — they reimplement the same `RPU_SEND_STATUS` request / `pu_docked` poll inline.
@@ -368,8 +380,8 @@ stateDiagram-v2
     ST_DWELL --> ST_REEL_IN: ACTION_END_DWELL
 
     ST_REEL_IN --> ST_START_MOTION: mcb_motion=REEL_IN
-    ST_MONITOR_MOTION --> ST_DOCK_WAIT: reel-in complete (MCBREPORT FINE, schedule ACTION_END_DOCK_WAIT@60s)
-    ST_DOCK_WAIT --> ST_DOCK: ACTION_MOTION_TIMEOUT or ACTION_END_DOCK_WAIT
+    ST_MONITOR_MOTION --> ST_DOCK_WAIT: reel-in complete (MCBREPORT FINE, dock_wait_deadline_ms = now + DOCK_WAIT_TIME)
+    ST_DOCK_WAIT --> ST_DOCK: dock_wait_deadline_ms passed (60 s)
     ST_DOCK --> ST_START_MOTION: mcb_motion=DOCK
 
     ST_MONITOR_MOTION --> ST_GET_PU_STATUS: dock motion complete
@@ -382,8 +394,8 @@ stateDiagram-v2
     ST_CONFIRM_MCB_LP --> [*]: mcb_low_power (success)
     ST_CONFIRM_MCB_LP --> [*]: RESEND_MCB_LP 2nd timeout (WARN)
 
-    ST_MONITOR_MOTION --> [*]: ACTION_MOTION_STOP (WARN)
-    ST_MONITOR_MOTION --> MODE_ERROR: ACTION_MOTION_TIMEOUT (CRIT, MCB_CANCEL_MOTION sent)
+    ST_MONITOR_MOTION --> MODE_ERROR: ACTION_MOTION_STOP (WARN)
+    ST_MONITOR_MOTION --> MODE_ERROR: motion_deadline_ms passed (CRIT, MCB_CANCEL_MOTION sent)
 ```
 
 Key details not obvious from the diagram:
@@ -511,7 +523,6 @@ messages).
 // internal actions
 ACTION_REEL_OUT,
 ACTION_REEL_IN,
-ACTION_IN_NO_LW,
 ACTION_DOCK,
 ACTION_MOTION_STOP,
 ACTION_END_DWELL,
@@ -519,8 +530,6 @@ ACTION_CHECK_PU,
 ACTION_END_WARMUP,
 ACTION_END_PREPROFILE,
 ACTION_OFFLOAD_PU,
-ACTION_MOTION_TIMEOUT,
-ACTION_END_DOCK_WAIT,
 
 // Multi-action commands
 COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
@@ -538,16 +547,16 @@ The prefixes exist purely to signal intent to a reader:
 
 - **`ACTION_*`** — a **single, primitive** operation or event: one reel motion
   direction, one PU check, one offload run, or an internal timer/event
-  (`ACTION_END_DWELL`, `ACTION_MOTION_TIMEOUT`, etc.). Even though
+  (`ACTION_END_DWELL`, `ACTION_END_PREPROFILE`, etc.). Even though
   verifying/monitoring an action can take several polling loops internally,
   it's still supervising **one** thing.
 - **`COMMAND_*`** — a **composite recipe** that, once triggered, orchestrates
   *several* `ACTION_*`-level primitives in sequence to accomplish something the
   ground thinks of as one operation. `COMMAND_REDOCK`'s own comment spells this
   out — *"reel out, reel in (no lw), check PU"* — and that's exactly what
-  `Flight_ReDock`'s `ST_ENTRY` does: it re-triggers three separate `ACTION_*`
-  flags (`ACTION_REEL_OUT` now, `ACTION_IN_NO_LW` at +30 s, `ACTION_CHECK_PU`
-  at +60 s). Likewise `COMMAND_PROFILE` (`Flight_Profile`) and
+  `Flight_ReDock` does: reel out, then reel in (no level wind) no earlier than
+  +30 s, then check the PU no earlier than +60 s, each after the previous step
+  finishes. Likewise `COMMAND_PROFILE` (`Flight_Profile`) and
   `COMMAND_DOCKED_PROFILE` (`Flight_DockedProfile`) are each multi-phase
   operations bundling an RA handshake + PU measure + motion + dwell + etc.
 

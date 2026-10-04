@@ -103,6 +103,39 @@ void StratoRachuts::FlightMode()
     }
 }
 
+const char * StratoRachuts::FlightBusyReason()
+{
+    if (0 != strcmp(mode_code, "FL")) return NULL;
+
+    switch (inst_substate) {
+    case FLM_IDLE:
+        return NULL;
+    case FL_ENTRY:
+    case FL_GPS_WAIT:
+        return "waiting for GPS time";
+    case FLM_CHECK_PU:
+        return "PU check in progress";
+    case FLM_MANUAL_MOTION:
+        return "manual motion in progress";
+    case FLM_REDOCK:
+        return "redock in progress";
+    case FLM_PU_OFFLOAD:
+        return "PU offload in progress";
+    case FLM_PROFILE:
+        return "profile in progress";
+    case FLM_DOCKED:
+        return "docked profile in progress";
+    case FL_ERROR_LANDING:
+    case FL_ERROR_LOOP:
+        return "in flight error state (send EXITERROR)";
+    case FL_SHUTDOWN_LANDING:
+    case FL_SHUTDOWN_LOOP:
+        return "shutdown in progress";
+    default:
+        return "flight mode busy";
+    }
+}
+
 void StratoRachuts::ManualFlight()
 {
     switch (inst_substate) {

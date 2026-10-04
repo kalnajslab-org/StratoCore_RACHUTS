@@ -21,6 +21,24 @@ bool StratoRachuts::RequireFlightMode(const char * cmd, String & msg3, StateFlag
     return true;
 }
 
+// Guard for TCs that start a flight sequence or set the lengths/parameters one
+// uses: requires flight mode with nothing running (FLM_IDLE). Checked before
+// any variable is written, so a TC sent during a running sequence (or in the
+// flight error state) is rejected with a WARN instead of changing that sequence
+// or silently expiring.
+bool StratoRachuts::RequireFlightIdle(const char * cmd, String & msg3, StateFlag_t & flag)
+{
+    if (!RequireFlightMode(cmd, msg3, flag)) return false;
+
+    const char * busy = FlightBusyReason();
+    if (NULL != busy) {
+        msg3 = String(cmd) + " ignored: " + busy;
+        flag = WARN;
+        return false;
+    }
+    return true;
+}
+
 // The telecommand handler must return ACK/NAK
 bool StratoRachuts::TCHandler(Telecommand_t telecommand)
 {
@@ -38,9 +56,10 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
     // MCB Telecommands -----------------------------------
     case DEPLOYx:
         msg2 = "TC Deploy Length";
+        if (!RequireFlightIdle("Deploy", msg3, msg1_flag)) break;
         deploy_length = mcbParam.deployLen;
         msg2 += ": " + String(deploy_length, 1) + " revs";
-        SetAction(ACTION_REEL_OUT); // will be ignored if wrong mode
+        SetAction(ACTION_REEL_OUT);
         break;
     case DEPLOYv:
         pibConfigs.deploy_velocity.Write(mcbParam.deployVel);
@@ -55,9 +74,10 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case RETRACTx:
         msg2 = "TC Retract Length";
+        if (!RequireFlightIdle("Retract", msg3, msg1_flag)) break;
         retract_length = mcbParam.retractLen;
         msg2 += ": " + String(retract_length, 1) + " revs";
-        SetAction(ACTION_REEL_IN); // will be ignored if wrong mode
+        SetAction(ACTION_REEL_IN);
         break;
     case RETRACTv:
         pibConfigs.retract_velocity.Write(mcbParam.retractVel);
@@ -72,9 +92,10 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case DOCKx:
         msg2 = "TC Dock Length";
+        if (!RequireFlightIdle("Dock", msg3, msg1_flag)) break;
         dock_length = mcbParam.dockLen;
         msg2 += ": " + String(dock_length, 1) + " revs";
-        SetAction(ACTION_DOCK); // will be ignored if wrong mode
+        SetAction(ACTION_DOCK);
         break;
     case DOCKv:
         pibConfigs.dock_velocity.Write(mcbParam.dockVel);
@@ -98,15 +119,22 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         mcbComm.TX_ASCII(MCB_CANCEL_MOTION); // no matter what, attempt to send (irrespective of mode)
         SetAction(ACTION_MOTION_STOP);
         break;
-    case ZEROREEL:
+    case ZEROREEL: {
         msg2 = "TC Zero Reel";
+        // not flight-only, but never while a flight sequence is running (e.g.
+        // mid-dwell, with the PU deployed and the MCB idle)
+        const char * busy = FlightBusyReason();
         if (mcb_motion_ongoing) {
             msg3 = "Can't zero reel, motion ongoing";
+            msg1_flag = WARN;
+        } else if (NULL != busy) {
+            msg3 = String("Can't zero reel, ") + busy;
             msg1_flag = WARN;
         } else {
             mcbComm.TX_ASCII(MCB_ZERO_REEL);
         }
         break;
+    }
     case CENTERLW:
         msg2 = "TC Center Level Wind";
         if (mcb_motion_ongoing) {
@@ -174,7 +202,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case RETRYDOCK:
         msg2 = "TC Retry Dock";
-        if (!RequireFlightMode("Retry dock", msg3, msg1_flag)) break;
+        if (!RequireFlightIdle("Retry dock", msg3, msg1_flag)) break;
         deploy_length = mcbParam.deployLen;
         retract_length = mcbParam.retractLen;
         msg2 += ": deploy=" + String(deploy_length, 1) + " revs, retract=" + String(retract_length, 1) + " revs";
@@ -182,7 +210,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case GETPUSTATUS:
         msg2 = "TC Get PU Status";
-        if (!RequireFlightMode("Get PU status", msg3, msg1_flag)) break;
+        if (!RequireFlightIdle("Get PU status", msg3, msg1_flag)) break;
         SetAction(ACTION_CHECK_PU);
         break;
     case PUPOWERON:
@@ -195,7 +223,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case PROFILE:
         msg2 = "TC Profile";
-        if (!RequireFlightMode("Profile", msg3, msg1_flag)) break;
+        if (!RequireFlightIdle("Profile", msg3, msg1_flag)) break;
         pibConfigs.profile_size.Write(pibParam.profileSize);
         pibConfigs.dock_amount.Write(pibParam.dockAmount);
         pibConfigs.dock_overshoot.Write(pibParam.dockOvershoot);
@@ -220,7 +248,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case OFFLOADPUPROFILE:
         msg2 = "TC Offload PU Profile";
-        if (!RequireFlightMode("PU profile offload", msg3, msg1_flag)) break;
+        if (!RequireFlightIdle("PU profile offload", msg3, msg1_flag)) break;
         SetAction(ACTION_OFFLOAD_PU);
         break;
     case SETPREPROFILETIME:
@@ -249,7 +277,7 @@ bool StratoRachuts::TCHandler(Telecommand_t telecommand)
         break;
     case DOCKEDPROFILE:
         msg2 = "TC Docked Profile";
-        if (!RequireFlightMode("Docked profile", msg3, msg1_flag)) break;
+        if (!RequireFlightIdle("Docked profile", msg3, msg1_flag)) break;
         docked_profile_time = pibParam.dockedProfileTime;
         docked_profile_rate = pibParam.dockedProfileRate;
         msg2 += ": length=" + String(docked_profile_time) + "s"

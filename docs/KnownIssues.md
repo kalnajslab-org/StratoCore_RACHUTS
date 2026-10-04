@@ -412,7 +412,7 @@ future comms symptom.
 
 ---
 
-## 11. Flight-only TCs silently no-op in the flight error state (RACHUTS) — **OPEN (fix planned)**
+## 11. Flight-only TCs silently no-op in the flight error state (RACHUTS) — **RESOLVED**
 
 The flight-only TCs (RETRYDOCK 142, GETPUSTATUS 143, PROFILE 146,
 OFFLOADPUPROFILE 147, DOCKEDPROFILE 153) just `SetAction(...)`; the action is
@@ -436,6 +436,21 @@ since unpinned — see `FlightModeControlFlow.md`).
 cleared in `FL_ENTRY`) and reject in `RequireFlightMode` with a `WARN`
 (`"<cmd> ignored: in flight error state (send EXITERROR)"`) so the command warns
 instead of vanishing.
+
+**Fix:** done more broadly than planned. A new guard, `RequireFlightIdle()`
+(`TCHandler.cpp`), rejects with a `WARN` unless flight mode is in `FLM_IDLE`,
+using `FlightBusyReason()` (`Flight.cpp`), which names whatever is running
+(`"... ignored: profile in progress"`, `"... ignored: in flight error state
+(send EXITERROR)"`, etc.) rather than tracking a separate error flag. It's
+checked before any variable is written. It guards 142, 143, 146, 147 and 153,
+plus DEPLOYx/RETRACTx/DOCKx (1/4/7). Those three used to write
+`deploy_length`/`retract_length`/`dock_length` unconditionally, which changed
+the length a running profile or redock would use for its next motion; they're
+also now rejected outside flight mode instead of silently expiring. ZEROREEL
+(12) is also refused while a flight sequence is running (it would otherwise
+reset the reel position mid-dwell with the PU deployed). The intended path to a
+manual motion during a sequence is CANCELMOTION (11), then EXITERROR (201) if it
+went to the error state, then the motion TC.
 
 ---
 
@@ -560,6 +575,11 @@ case ST_ENTRY:
    machine is currently doing — a premature or duplicate trigger indistinguishable
    from the legitimate one.
 
+**Update:** `Flight_ReDock` no longer schedules its steps (it now waits on
+`millis()` deadlines and on each motion finishing), so this specific trace
+can't happen any more; `ACTION_IN_NO_LW` has been removed. The underlying
+scheduler behavior is unchanged and still applies to the resend timers.
+
 **This is easily reachable via `CANCELMOTION` (TC 11), and inconsistently so**
 — the three motion sub-machines handle it differently:
 
@@ -632,7 +652,7 @@ which this rebuild nests inside `Flight_DockedProfile` without changing.
 
 ---
 
-## 14. `CANCELMOTION` only cancels a profile during its motion-in-progress window — **PARTIALLY FIXED**
+## 14. `CANCELMOTION` only cancels a profile during its motion-in-progress window — **RESOLVED**
 
 `CANCELMOTION` (TC 11) sets `ACTION_MOTION_STOP` unconditionally, but
 `Flight_Profile` only calls `CheckAction(ACTION_MOTION_STOP)` in **one** of its
@@ -684,6 +704,42 @@ extending the `CheckAction(ACTION_MOTION_STOP)` check to every waiting state
 (the RA handshake, PU go-measure handshake, pre-profile wait, dwell wait,
 dock-wait timer, post-dock PU check, MCB-low-power confirm), not just
 `ST_MONITOR_MOTION`. Deferred to later.
+
+**Fix (manual profile and manual motion):** `Flight_Profile` and
+`Flight_ManualMotion` now check `ACTION_MOTION_STOP` once at the top of the
+function, ahead of the state switch (the same pattern as `CANCELMEASURE` in
+`Flight_DockedProfile`), so a cancel is acted on in every state. What it does
+depends on where the PU is:
+
+- `Flight_Profile`, before reel-out is commanded (`ST_ENTRY` through
+  `ST_PREPROFILE_WAIT`, and `ST_REEL_OUT`): the PU is still docked, so the RPU
+  is sent to standby, the schedule is cleared, a WARN TM is sent, and the
+  profile returns to `FLM_IDLE`.
+- `Flight_Profile`, once a motion is commanded or the PU is deployed
+  (`ST_START_MOTION` through `ST_REDOCK`): `MODE_ERROR`, as before for a cancel
+  during a motion. Cancel Motion is only used for an anomaly, so stopping and
+  leaving recovery to the ground is the intended response.
+- `Flight_Profile`, docked with all motion finished (`ST_CONFIRM_MCB_LP`
+  onward): ignored, so the offload finishes.
+- `Flight_ManualMotion`: a cancel before the motion is sent (the RA handshake)
+  returns to `FLM_IDLE` with a WARN TM; after it's sent, the existing
+  "Commanded motion stop" path. Both clear the schedule, which also fixes the
+  manual-motion cancel-and-retry case in §13a. A cancel after the motion has
+  finished (`ST_TM_ACK`) is ignored.
+
+`Flight_ReDock` (TC 142) now does the same: a cancel before its reel-out is sent
+clears the schedule (the pending reel-in and PU check) and returns to
+`FLM_IDLE`; after that, `MODE_ERROR`; during its final PU check, a WARN and the
+check finishes. Because §11's fix makes CANCELMOTION the only way out of a
+running sequence, every sequence must be cancellable; the docked profile uses
+CANCELMEASURE, and the PU check/offload always end on their own timeouts.
+
+A cancel that isn't acted on now sends a WARN TM instead of being dropped
+silently. The profile's docked phase and `ST_TM_ACK` send it directly; anywhere
+else, `WatchFlags()` sends it when `ACTION_MOTION_STOP` goes stale unconsumed
+("Cancel motion: no motion to cancel", or "...not handled in current state" if
+`mcb_motion_ongoing`, since `MCB_CANCEL_MOTION` was still sent to the MCB).
+The redock's final PU check also sends it directly.
 
 ---
 

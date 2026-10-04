@@ -23,6 +23,34 @@ bool StratoRachuts::Flight_ManualMotion(bool restart_state)
 {
     if (restart_state) manualmotion_state = ST_ENTRY;
 
+    // Cancel Motion (TC 11, which has already sent MCB_CANCEL_MOTION) is checked
+    // here in every state, not just ST_MONITOR_MOTION, so a cancel sent while
+    // waiting for the RA ack isn't dropped and the motion then started anyway.
+    // Either way the schedule is cleared so this motion's pending resend timers
+    // can't fire into the next one.
+    if (CheckAction(ACTION_MOTION_STOP)) {
+        switch (manualmotion_state) {
+        case ST_ENTRY:
+        case ST_SEND_RA:
+        case ST_WAIT_RAACK:
+            // motion not yet commanded
+            scheduler.ClearSchedule();
+            resend_attempted = false;
+            SendTextTM("Manual motion cancelled before start", WARN);
+            return true;
+        case ST_TM_ACK:
+            // motion already finished, nothing to stop
+            SendTextTM("Cancel motion: no motion to cancel, manual motion already complete", WARN);
+            break;
+        default:
+            // todo: verification of motion stop
+            scheduler.ClearSchedule();
+            resend_attempted = false;
+            SendTextTM("Commanded motion stop", FINE);
+            return true;
+        }
+    }
+
     switch (manualmotion_state) {
     case ST_ENTRY:
     case ST_SEND_RA:
@@ -75,7 +103,7 @@ bool StratoRachuts::Flight_ManualMotion(bool restart_state)
     case ST_VERIFY_MOTION:
         if (mcb_motion_ongoing) { // set in the Ack handler
             log_nominal("MCB commanded motion");
-            scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
+            motion_deadline_ms = millis() + max_profile_seconds * 1000UL;
             manualmotion_state = ST_MONITOR_MOTION;
         }
 
@@ -92,14 +120,7 @@ bool StratoRachuts::Flight_ManualMotion(bool restart_state)
         break;
 
     case ST_MONITOR_MOTION:
-        if (CheckAction(ACTION_MOTION_STOP)) {
-            // todo: verification of motion stop
-            SendTextTM("Commanded motion stop", FINE);
-            return true;
-            break;
-        }
-
-        if (CheckAction(ACTION_MOTION_TIMEOUT)) {
+        if ((int32_t) (millis() - motion_deadline_ms) >= 0) {
             SendMCBTM("MCBREPORT", CRIT, "MCB Motion took longer than expected");
             mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile

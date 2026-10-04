@@ -32,6 +32,8 @@
 #define FLAG_STALE      3
 
 #define MCB_RESEND_TIMEOUT      10
+// Seconds to wait between the end of the profile reel-in and the start of the dock
+#define DOCK_WAIT_TIME          60
 // How long to wait for an RPU reply before retrying a dock command. Observed
 // RPU turnaround on the bench: ~0.6 s for a status reply, ~1.1 s for a
 // go-measure/go-standby ack, ~1.9 s for the largest (7692 B) record block --
@@ -97,7 +99,6 @@ enum ScheduleAction_t : uint8_t {
     // internal actions
     ACTION_REEL_OUT,
     ACTION_REEL_IN,
-    ACTION_IN_NO_LW,
     ACTION_DOCK,
     ACTION_MOTION_STOP,
     ACTION_CANCEL_MEASURE,
@@ -107,8 +108,6 @@ enum ScheduleAction_t : uint8_t {
     ACTION_END_PREPROFILE,
     ACTION_END_DOCKED_PROFILE,
     ACTION_OFFLOAD_PU,
-    ACTION_MOTION_TIMEOUT,
-    ACTION_END_DOCK_WAIT,
 
     // Multi-action commands
     COMMAND_REDOCK,    // reel out, reel in (no lw), check PU
@@ -187,6 +186,9 @@ private:
 
     // Flight mode subset (in Flight.cpp)
     void ManualFlight();
+    // Why flight mode can't take a new command right now (e.g. "profile in
+    // progress"), or NULL if it is in FLM_IDLE or not in flight mode
+    const char * FlightBusyReason();
 
     // Flight states (each in its own .cpp file)
     // when starting the state, call with restart_state = true
@@ -205,6 +207,10 @@ private:
     // the TC-ack detail (msg3) + flag naming the command and the required mode,
     // and returns false (so the caller can break out).
     bool RequireFlightMode(const char * cmd, String & msg3, StateFlag_t & flag);
+    // Stricter guard for TCs that start a sequence or set its parameters: also
+    // rejects (WARN) while a flight sequence is running or in the flight error
+    // state, so the TC can't change a running sequence or silently expire.
+    bool RequireFlightIdle(const char * cmd, String & msg3, StateFlag_t & flag);
 
     // Action handler for scheduled actions
     void ActionHandler(uint8_t action);
@@ -278,6 +284,10 @@ private:
     bool mcb_motion_ongoing = false;
     bool mcb_dock_ongoing = false;
     uint32_t max_profile_seconds = 0;
+    // millis() deadline for the motion in progress, set when the MCB acks the
+    // motion command. A deadline rather than a scheduled action so that it
+    // can't outlive its motion and fire during a later one.
+    uint32_t motion_deadline_ms = 0;
     bool mcb_reeling_in = false;
     uint16_t mcb_tm_counter = 0;
     float reel_pos = 0.0;

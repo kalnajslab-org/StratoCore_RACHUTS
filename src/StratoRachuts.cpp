@@ -282,6 +282,16 @@ void StratoRachuts::WatchFlags()
             if (action_flags[i].stale_count >= FLAG_STALE) {
                 action_flags[i].flag_value = false;
                 action_flags[i].stale_count = 0;
+
+                // A Cancel Motion (TC 11) that no state machine consumed was not
+                // acted on (the TC handler still sent MCB_CANCEL_MOTION)
+                if (ACTION_MOTION_STOP == i) {
+                    if (mcb_motion_ongoing) {
+                        SendTextTM("Cancel motion not handled in current state (MCB cancel sent)", WARN);
+                    } else {
+                        SendTextTM("Cancel motion: no motion to cancel", WARN);
+                    }
+                }
             }
         }
     }

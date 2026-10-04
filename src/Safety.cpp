@@ -83,7 +83,6 @@ void StratoRachuts::SafetyMode()
     case SA_VERIFY_DOCK:
         if (mcb_motion_ongoing) { // set in the Ack handler
             log_nominal("MCB commanded motion");
-            scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
             inst_substate = SA_MONITOR_DOCK;
         }
 

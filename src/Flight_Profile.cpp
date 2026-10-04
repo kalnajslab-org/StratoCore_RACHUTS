@@ -32,12 +32,49 @@ enum ProfileStates_t {
 
 static ProfileStates_t profile_state = ST_ENTRY;
 static bool resend_attempted = false;
-static uint8_t redock_count = 0;
+// wider than num_redock (uint8_t) so it can always exceed it without wrapping
+static uint16_t redock_count = 0;
 static uint32_t pu_reply_deadline_ms = 0;
+static uint32_t dock_wait_deadline_ms = 0;
 
 bool StratoRachuts::Flight_Profile(bool restart_state)
 {
     if (restart_state) profile_state = ST_ENTRY;
+
+    // Cancel Motion (TC 11, which has already sent MCB_CANCEL_MOTION) is checked
+    // here in every state, not just ST_MONITOR_MOTION, so it can't be dropped
+    // (stale after FLAG_STALE loops) while the profile is waiting between motions.
+    if (CheckAction(ACTION_MOTION_STOP)) {
+        switch (profile_state) {
+        case ST_ENTRY:
+        case ST_SEND_RA:
+        case ST_WAIT_RAACK:
+        case ST_SET_PU_PROFILE:
+        case ST_CONFIRM_PU_PROFILE:
+        case ST_PREPROFILE_WAIT:
+        case ST_REEL_OUT:
+            // No reel motion commanded yet, so the PU is still docked: stop the
+            // RPU measuring, drop this profile's pending timers so they can't
+            // fire into the next one, and return to FLM_IDLE.
+            puComm.TX_GoStandby(pibConfigs.rpu_bat_temp.Read());
+            scheduler.ClearSchedule();
+            resend_attempted = false;
+            SendTextTM("Profile cancelled before reel out", WARN);
+            return true;
+        case ST_CONFIRM_MCB_LP:
+        case ST_GO_STANDBY:
+        case ST_CONFIRM_STANDBY:
+        case ST_OFFLOAD:
+            // Docked and all motion finished: nothing to stop, let the offload finish
+            SendTextTM("Cancel motion: no motion to cancel, profile motion already complete", WARN);
+            break;
+        default:
+            // A motion has been commanded or the PU is deployed
+            SendTextTM("Commanded motion stop in autonomous", WARN);
+            inst_substate = MODE_ERROR; // will force exit of Flight_Profile
+            return false;
+        }
+    }
 
     switch (profile_state) {
     case ST_ENTRY:
@@ -124,8 +161,8 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
         break;
 
     case ST_DOCK_WAIT:
-        // wait for the timeout set for the reel out or the backup action, whichever comes first
-        if (CheckAction(ACTION_MOTION_TIMEOUT) || CheckAction(ACTION_END_DOCK_WAIT)) {
+        // fixed wait after the reel-in before docking
+        if ((int32_t) (millis() - dock_wait_deadline_ms) >= 0) {
             profile_state = ST_DOCK;
         }
         break;
@@ -151,7 +188,8 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
             scheduler.AddAction(RESEND_MCB_LP, MCB_RESEND_TIMEOUT);
             profile_state = ST_CONFIRM_MCB_LP;
         } else {
-            if ((pibConfigs.num_redock.Read() + 1) == ++redock_count) {
+            // > rather than ==, so lowering num_redock by TC mid-sequence still stops the loop
+            if (++redock_count > pibConfigs.num_redock.Read()) {
                 SendTextTM("No dock! Exceeded allowable number of redock attempts", CRIT);
                 inst_substate = MODE_ERROR; // will force exit of Flight_Profile
             } else {
@@ -191,7 +229,7 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
         log_debug("FLA verify motion");
         if (mcb_motion_ongoing) { // set in MCBRouter when MCB acks motion command
             log_nominal("MCB commanded motion");
-            scheduler.AddAction(ACTION_MOTION_TIMEOUT, max_profile_seconds);
+            motion_deadline_ms = millis() + max_profile_seconds * 1000UL;
             profile_state = ST_MONITOR_MOTION;
         }
 
@@ -210,13 +248,7 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
     case ST_MONITOR_MOTION:
         log_debug("FLA monitor motion");
 
-        if (CheckAction(ACTION_MOTION_STOP)) {
-            SendTextTM("Commanded motion stop in autonomous", WARN);
-            inst_substate = MODE_ERROR; // will force exit of Flight_Profile
-            break;
-        }
-
-        if (CheckAction(ACTION_MOTION_TIMEOUT)) {
+        if ((int32_t) (millis() - motion_deadline_ms) >= 0) {
             SendMCBTM("MCBREPORT", CRIT, "MCB Motion took longer than expected");
             mcbComm.TX_ASCII(MCB_CANCEL_MOTION);
             inst_substate = MODE_ERROR; // will force exit of Flight_Profile
@@ -239,7 +271,7 @@ bool StratoRachuts::Flight_Profile(bool restart_state)
                 break;
             case MOTION_REEL_IN:
                 SendMCBTM("MCBREPORT", FINE, "Finished profile reel in");
-                scheduler.AddAction(ACTION_END_DOCK_WAIT, 60);
+                dock_wait_deadline_ms = millis() + DOCK_WAIT_TIME * 1000UL;
                 profile_state = ST_DOCK_WAIT;
                 break;
             case MOTION_DOCK:
