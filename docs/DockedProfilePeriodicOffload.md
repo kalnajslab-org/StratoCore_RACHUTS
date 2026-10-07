@@ -234,7 +234,7 @@ anyway" beats a fast, clear abort for a genuine link/power failure.
   configured period length); `RPU_TM_MAX_RECORDS` (160, duplicates the RPU-side constant) and
   `MAX_DOCKED_PERIOD_TMS` (`MAX_SCHEDULE_SIZE * 3/4`) for the new guard; `PU_RESEND_TIMEOUT` renamed to
   `RPU_RECEIVE_TIMEOUT` and retuned 10s → 6s (bench-measured RPU turnaround: ~0.6s status reply, ~1.1s
-  go-measure/standby ack, ~1.9s largest 7692B record block — 6s keeps ~3x margin while halving
+  go-measure/standby ack, ~1.9s largest record block (measured at 7692B; now 8172B) — 6s keeps ~3x margin while halving
   worst-case dead time on an unresponsive RPU). Shared by `Flight_Profile.cpp`, `Flight_CheckPU.cpp`,
   `Flight_ReDock.cpp` — mechanical rename there, no other behavior change.
 - [src/StratoRachuts.cpp](../src/StratoRachuts.cpp) — `SendRPUREPORT` StateDetails2 gains a `period:`

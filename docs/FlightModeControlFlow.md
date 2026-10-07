@@ -437,7 +437,7 @@ stateDiagram-v2
   `check_pu_success`); it appears to exist mainly to prime dock-state tracking
   before the pull begins.
 - Each batch is offloaded as one `RACHUTSREPORT`-adjacent binary `RPUREPORT` TM
-  (`SendRPUREPORT(packet_num)`), capped at `RPU_TM_MAX_RECORDS` (120) records per
+  (`SendRPUREPORT(packet_num)`), capped at `RPU_TM_MAX_RECORDS` (160) records per
   block — see `KnownIssues.md` Appendix A.
 - `ST_TM_ACK` never fails out — after one resend attempt it proceeds back to
   `ST_REQUEST_PACKET` regardless of ack outcome, unlike `Flight_ManualMotion`'s

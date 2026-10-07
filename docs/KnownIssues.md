@@ -147,16 +147,13 @@ root-cause theory):**
 
 **Mitigations still in place (may be safe to relax once the fix above is
 validated — kept for now as belt-and-suspenders):**
-- RPU batch capped at **160 records** (`RPU_TM_MAX_RECORDS`, 7692 B/block —
-  `RPU_BLOCK_HDR_BYTES(12) + 160 × RPU_RECORD_BYTES(48)`), leaving 500 bytes of
-  margin against RACHUTS's `PU_BUFFER_SIZE` (8192, `StratoRachuts.h`). A
-  `static_assert` was added in RPU.cpp (`RPU_TM_BUFFER_BYTES < 8092`, i.e. a
-  required 100-byte headroom below 8192) so a future `RPURecord` growth that
-  busts this margin now fails the RPU build instead of silently getting
-  rejected at runtime on the RACHUTS side. Note this check is a hardcoded
-  duplicate of RACHUTS's `PU_BUFFER_SIZE` value, not a shared constant — if
-  `PU_BUFFER_SIZE` itself is ever changed on the RACHUTS side, this assert
-  won't automatically track it and would need a matching update.
+- RPU batch capped at **160 records** (`RPU_TM_MAX_RECORDS`, 8172 B/block —
+  `RPU_BLOCK_HDR_BYTES(12) + 160 × RPU_RECORD_BYTES(51)`, RPU_REC_VERSION 4), leaving only 20 bytes of
+  margin against RACHUTS's `PU_BUFFER_SIZE` (8192, `StratoRachuts.h`) and the StrateoleXML
+  `TMBUF_MAXSIZE` (8192). Any further `RPURecord` growth, or a higher `RPU_TM_MAX_RECORDS`, overflows
+  the TM buffer and `HandlePUBin` NAKs the block. The `static_assert` on `RPU_TM_BUFFER_BYTES` that
+  once guarded this in RPU.cpp is no longer present, so nothing fails at build time; lower
+  `RPU_TM_MAX_RECORDS` (here and in RPU.cpp) before growing the record.
 - RACHUTS now **accepts and forwards** a checksum-invalid `RPU_PROFILE_RECORD`
   to the ground rather than NAK/retrying (`PURouter.cpp::HandlePUBin`) — added
   2026-08-09, before the race was found, as a defensive measure against
@@ -848,7 +845,7 @@ StateMess2/3 are empty (omitted from the XML).
 | TM (StateMess1) | Builder | StateMess2 | StateMess3 | Flag1 | Binary payload |
 |---|---|---|---|---|---|
 | `RACHUTSREPORT` | `SendRACHUTSREPORT(rpu_block, source)` — sole caller is `SendPeriodicRACHUTSREPORT()` (see below) | `<mode>, <source>` — current RACHUTS mode code (`SB`/`FL`/`LP`/`SA`/`EF`) + source: block origin (`LORA` / `DOCK`) when an `rpu` block is present, or the mode code (e.g. `SB, SB`) on a header-only report | `Reel: <reel_pos>` (last-known reel position; refreshed only by MCB motion TMs) | `FINE` | JSON object, **variable length**: `{"rachuts":{"epoch","mode","substate","reel","src","rpu_age_s"}, "rpu":{...}}`. `epoch` is the PIB system time (Unix seconds via `now()`, like RATSREPORT's header epoch; unset until the RTC is set from GPS). The `rachuts` header is always present; the `rpu` block (from `RPUPacket::toJSON()` or the dock `RPU_STATUS` reply) is included **only when RPU status is available**, else absent. `rpu_age_s` = seconds since the last RPU status was received (`-1` if never). Ground must read `msg["rpu"]` and handle its absence; length is not fixed — don't hard-code it. |
-| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> period:<docked_period_num> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented once per docked profile — not per period — not part of the RPU record itself; `docked_period_num` counts measure-then-offload periods within one docked profile, 0 for a standalone TC 147 offload, so `(profile_id, docked_period_num, packet_num)` stays unique across a multi-period profile) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 48 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 7692 B/block. |
+| `RPUREPORT` | `SendRPUREPORT(packet_num)` (`StratoRachuts.cpp`; binary payload added earlier in `HandlePUBin`, PURouter) | `profile:<profile_id> period:<docked_period_num> packet:<packet_num> records: <n>` (`profile_id` is a RACHUTS-side EEPROM counter, incremented once per docked profile — not per period — not part of the RPU record itself; `docked_period_num` counts measure-then-offload periods within one docked profile, 0 for a standalone TC 147 offload, so `(profile_id, docked_period_num, packet_num)` stays unique across a multi-period profile) | `<pu_last_status>, <lat>, <lon>, <alt>` (or `PU Profile Record: unable to add status info`) | `FINE` (`WARN` if StateMess3 fails to format) | Binary `RPURecord` block — n × 51 B (`RPU_RECORD_BYTES`), capped at 160 records (`RPU_TM_MAX_RECORDS`) ≈ 8172 B/block (incl. 12 B block header). |
 | `MCB TM Packet <n>` | `AddMCBTM()`, real-time mode | — | — | `FINE` | One MCB motion data packet, 29 B (`MOTION_TM_SIZE`). |
 | `MCBACK` / `MCBASCII` / `MCBREPORT` / `MCBSTRING` | `SendMCBTM(TMname, flag, message)` (RATS-style) | the message (`message`), e.g. `MCB acked deploy acc`, `Finished profile reel out`, `MCB Fault: ...`, `MCBString: <err>` | `Reel: <reel_pos>` (current reel position) | `flag` (`FINE`/`CRIT`) | Accumulated `MCB_TM_buffer`. Non-real-time framing: 4-B start-epoch header (set in `NoteProfileStart`), then per packet `0xA5` sync + 2-B elapsed-tenths + 29-B motion data. |
 | `MCB EEPROM Contents` | `SendMCBEEPROM()` | — | — | `FINE` | Raw MCB EEPROM dump (`mcbComm.binary_rx.bin_buffer`, `bin_length` B). |

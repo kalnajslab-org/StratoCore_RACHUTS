@@ -34,7 +34,7 @@
 #define MCB_RESEND_TIMEOUT      10
 // How long to wait for an RPU reply before retrying a dock command. Observed
 // RPU turnaround on the bench: ~0.6 s for a status reply, ~1.1 s for a
-// go-measure/go-standby ack, ~1.9 s for the largest (7692 B) record block --
+// go-measure/go-standby ack, ~1.9 s for the largest record block (measured at 7692 B; now 8172 B) --
 // so 6 s leaves roughly 3x margin on the slowest case while cutting the
 // dead time on an unresponsive RPU from 20 s to 12 s per two-attempt sequence.
 #define RPU_RECEIVE_TIMEOUT     6
