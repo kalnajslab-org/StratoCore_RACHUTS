@@ -3,7 +3,7 @@
 Quick reference for the telecommands RACHUTS (PIB) accepts. Numbers are the TC
 id. "Params" lists the ordered parameters the command expects; commands with no
 Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
-`src/TCHandler.cpp` (handlers). Last updated 2026-08-25.
+`src/TCHandler.cpp` (handlers). Last updated 2026-10-10.
 
 > Only the commands below are handled by RACHUTS. TC ranges for other
 > instruments — **50–57** (FTR/DIB), **60–76** (RATS/ECU), **100–119** (PHA) —
@@ -16,13 +16,13 @@ Params take none. Source of truth: `StrateoleXML/Telecommand.h` (enum) and
 | TC | Name | Description | Params |
 |----|------|-------------|--------|
 | 1 | DEPLOYx | Reel out | deploy length (rev) |
-| 2 | DEPLOYv | Set deploy velocity | velocity (rev/s) |
+| 2 | DEPLOYv | Set deploy velocity (default 250; used for all reel-outs, including redock) | velocity (rev/min) |
 | 3 | DEPLOYa | Set deploy acceleration | accel (rev/s²) |
 | 4 | RETRACTx | Reel in | retract length (rev) |
-| 5 | RETRACTv | Set retract velocity | velocity (rev/s) |
+| 5 | RETRACTv | Set retract velocity (default 250; profile reel-in and TC 4) | velocity (rev/min) |
 | 6 | RETRACTa | Set retract acceleration | accel (rev/s²) |
 | 7 | DOCKx | Set dock length | dock length (rev) |
-| 8 | DOCKv | Set dock velocity | velocity (rev/s) |
+| 8 | DOCKv | Set dock velocity (default 80; dock moves and the redock reel-in) | velocity (rev/min) |
 | 9 | DOCKa | Set dock acceleration | accel (rev/s²) |
 | 10 | FULLRETRACT | Full retract | — |
 | 11 | CANCELMOTION | Cancel any ongoing motion | — |
